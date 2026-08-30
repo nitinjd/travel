@@ -10,6 +10,7 @@
   border: 1px solid var(--line);
   border-radius: 12px;
   background: #f8f9fc;
+  min-width: 0;
 }
 .travelConfig {
   grid-template-columns: 1.5fr 0.8fr 1fr 0.8fr auto auto;
@@ -26,6 +27,10 @@
   color: #475467;
   font-size: 11px;
   font-weight: 750;
+}
+.configField input,
+.configField select {
+  width: 100%;
 }
 .configChecks {
   display: flex;
@@ -275,6 +280,7 @@
   border: 1px solid var(--line);
   border-radius: 10px;
   background: #f8f9fc;
+  min-width: 0;
 }
 .busInventoryRow input:disabled {
   background: #eef1f6;
@@ -292,6 +298,14 @@
   grid-template-columns: 1.2fr 1fr 0.7fr auto;
   border-style: dashed;
   background: white;
+}
+@media (max-width: 1100px) {
+  .travelConfig,
+  .roomConfig,
+  .busInventoryRow,
+  .addBus {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 @media (max-width: 850px) {
   .travelConfig,
