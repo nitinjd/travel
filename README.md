@@ -18,6 +18,14 @@ One-hosting full-stack tour registration system. The Express server exposes the 
 5. Run `npm start`.
 6. Call `POST /api/admin/bootstrap` once using the same `ADMIN_EMAIL` and `ADMIN_PASSWORD` values to create the administrator.
 
+The main SQL script already creates the initial administrator:
+
+- Admin URL: `/admin`
+- Email: `admin@gmail.com`
+- Password: `Test@123`
+
+Change this password after initial deployment. The public registration URL is `/`; it intentionally contains no admin label or navigation menu.
+
 For development, run the API with `npm run dev` and the client separately with `npm --prefix client run dev`.
 
 ## Reports
@@ -26,7 +34,7 @@ Admin reports support overall, bus, self-travel and room views. Excel downloads 
 
 ## Inventory and concurrency
 
-The seed contains 16 four-person Non-AC rooms, six eight-bed Non-AC rooms, 40 four-person AC rooms with one optional floor bed each, and Bus A with 45 seats. The administrator can add room inventory from Trip Setup. When a bus fills, submission automatically creates Bus B, Bus C and so on with the configured capacity.
+The configurable seed room types are AC, Non AC and Dormitory. It contains 16 four-person Non AC rooms, six eight-bed Dormitory rooms, 40 four-person AC rooms with one free optional floor bed each, and Bus A with 45 seats. The administrator can rename/edit room types and add room inventory from Trip Setup. When a bus fills, submission automatically creates Bus B, Bus C and so on with the configured capacity.
 
 Final submission runs inside a MySQL transaction. It locks the travel option and selected room inventory with `SELECT ... FOR UPDATE`, rechecks availability, allocates the family, and commits atomically. Concurrent requests therefore cannot reserve the same room or last bus seats.
 
