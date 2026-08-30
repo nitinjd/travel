@@ -23,8 +23,9 @@ const api = async (url, options = {}) => {
   return r.json();
 };
 export default function App() {
+  const isAdminPage = window.location.pathname.startsWith("/admin");
   const [tour, setTour] = useState(null),
-    [tab, setTab] = useState("register"),
+    [tab, setTab] = useState("admin"),
     [token, setToken] = useState(localStorage.getItem("tourToken")),
     [error, setError] = useState("");
   useEffect(() => {
@@ -48,39 +49,32 @@ export default function App() {
             {tour.location}
           </div>
         )}
-        <button className="admin" onClick={() => setTab("admin")}>
-          Admin
-        </button>
+        {isAdminPage && <div className="admin">Administrator</div>}
       </header>
-      <main>
-        <nav>
-          <button
-            className={tab === "register" ? "active" : ""}
-            onClick={() => setTab("register")}
-          >
-            <Users />
-            Registration
-          </button>
-          <button
-            className={tab === "admin" ? "active" : ""}
-            onClick={() => setTab("admin")}
-          >
-            <Settings2 />
-            Trip Setup
-          </button>
-          <button
-            className={tab === "reports" ? "active" : ""}
-            onClick={() => setTab("reports")}
-          >
-            <Download />
-            Reports
-          </button>
-        </nav>
+      <main className={isAdminPage ? "" : "publicMain"}>
+        {isAdminPage && (
+          <nav>
+            <button
+              className={tab === "admin" ? "active" : ""}
+              onClick={() => setTab("admin")}
+            >
+              <Settings2 />
+              Trip Setup
+            </button>
+            <button
+              className={tab === "reports" ? "active" : ""}
+              onClick={() => setTab("reports")}
+            >
+              <Download />
+              Reports
+            </button>
+          </nav>
+        )}
         <section className="content">
           {error && <div className="alert">{error}</div>}
           {!tour ? (
             <div className="card">Loading tour…</div>
-          ) : tab === "register" ? (
+          ) : !isAdminPage ? (
             <Registration tour={tour} />
           ) : !token ? (
             <Login
@@ -139,9 +133,7 @@ function Registration({ tour }) {
         travelItem?.charge_type === "PER_PERSON"
           ? people.length * travelItem.charge_amount
           : travelItem?.charge_amount || 0,
-      stay =
-        units * (roomItem?.charge_amount || 0) +
-        extra * (roomItem?.extra_bed_charge || 0);
+      stay = units * (roomItem?.charge_amount || 0);
     return { food, tv, stay, total: food + tv + stay };
   }, [people.length, travelItem, roomItem, units, extra, tour]);
   const update = (i, k, v) =>
@@ -191,6 +183,7 @@ function Registration({ tour }) {
         title="Plan your complete tour"
         text="Food, travel and stay charges cover the whole tour—not individual days."
       />
+      <AvailabilityOverview tour={tour} />
       <div className="steps">
         {["Passengers", "Travel", "Stay", "Review"].map((x, i) => (
           <div className={step >= i + 1 ? "on" : ""} key={x}>
@@ -322,7 +315,8 @@ function Registration({ tour }) {
                   <b>{x.name}</b>
                   <small>
                     {money(x.charge_amount)} • {x.capacity} people/unit •{" "}
-                    {x.inventory?.available_units || 0} units available ({x.inventory?.remaining_capacity || 0} people)
+                    {x.inventory?.available_units || 0} units available (
+                    {x.inventory?.remaining_capacity || 0} people)
                   </small>
                 </button>
               ))}
@@ -355,6 +349,40 @@ function Registration({ tour }) {
               <Summary label="Members" value={people.length} />
               <Summary label="Travel" value={travelItem?.name} />
               <Summary label="Stay" value={`${roomItem?.name} × ${units}`} />
+            </div>
+            <div className="previewDetails">
+              <div>
+                <b>Contact details</b>
+                <p>
+                  {family.contact_name} • {family.contact_phone}
+                  {family.contact_email ? ` • ${family.contact_email}` : ""}
+                </p>
+              </div>
+              <div>
+                <b>Passengers</b>
+                {people.map((person, index) => (
+                  <p key={index}>
+                    {index + 1}. {person.name} — {person.gender} — Age{" "}
+                    {person.age}
+                  </p>
+                ))}
+              </div>
+              <div>
+                <b>Travel selection</b>
+                <p>
+                  {travelItem?.name}
+                  {travelItem?.mode === "BUS"
+                    ? ` • ${people.length} seats required`
+                    : ""}
+                </p>
+              </div>
+              <div>
+                <b>Accommodation selection</b>
+                <p>
+                  {roomItem?.name} × {units}
+                  {extra ? ` • ${extra} free floor bed(s)` : ""}
+                </p>
+              </div>
             </div>
             <div className="bill">
               <Row label="Food" value={quote.food} />
@@ -389,12 +417,47 @@ function Registration({ tour }) {
                 <ChevronRight />
               </>
             ) : (
-              "Final submit"
+              "Confirm & submit"
             )}
           </button>
         </footer>
       </div>
     </>
+  );
+}
+function AvailabilityOverview({ tour }) {
+  const buses = tour.travelOptions.flatMap((x) => x.inventory || []);
+  return (
+    <div className="availability">
+      <div>
+        <Bus />
+        <span>
+          <b>Bus seat availability</b>
+          {buses.length ? (
+            buses.map((x) => (
+              <small key={x.bus_instance_id}>
+                {x.bus_name}: {x.remaining_seats} of {x.capacity} seats
+                remaining
+              </small>
+            ))
+          ) : (
+            <small>A new 45-seat bus will open when required</small>
+          )}
+        </span>
+      </div>
+      {tour.roomTypes.map((x) => (
+        <div key={x.id}>
+          <Hotel />
+          <span>
+            <b>{x.name}</b>
+            <small>
+              {x.inventory?.available_units || 0} units •{" "}
+              {x.inventory?.remaining_capacity || 0} people capacity remaining
+            </small>
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }
 function Login({ onLogin }) {
@@ -625,7 +688,11 @@ function Admin({ tour, token, refresh }) {
               </button>
             </div>
           ))}
-          <InventoryBuilder roomTypes={rooms} token={token} onSaved={setMessage} />
+          <InventoryBuilder
+            roomTypes={rooms}
+            token={token}
+            onSaved={setMessage}
+          />
         </div>
         <div className="card wide editor">
           <h2>Travel plan</h2>
@@ -680,11 +747,52 @@ function InventoryBuilder({ roomTypes, token, onSaved }) {
     const result = await api("/api/admin/room-inventory/bulk", {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ room_type_id: Number(roomTypeId), quantity, prefix, floor_number: floor, standard_capacity: room.capacity, extra_bed_capacity: room.max_extra_beds }),
+      body: JSON.stringify({
+        room_type_id: Number(roomTypeId),
+        quantity,
+        prefix,
+        floor_number: floor,
+        standard_capacity: room.capacity,
+        extra_bed_capacity: room.max_extra_beds,
+      }),
     });
-    onSaved(`${result.created} inventory unit(s) added. Reload to see the updated availability.`);
+    onSaved(
+      `${result.created} inventory unit(s) added. Reload to see the updated availability.`,
+    );
   };
-  return <div className="inventoryBuilder"><b>Add room inventory</b><select value={roomTypeId} onChange={(e) => setRoomTypeId(e.target.value)}>{roomTypes.map((x) => <option value={x.id} key={x.id}>{x.name}</option>)}</select><input type="number" min="1" value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} title="Quantity"/><input value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="Room prefix"/><input value={floor} onChange={(e) => setFloor(e.target.value)} placeholder="Floor"/><button onClick={add}>Add inventory</button></div>;
+  return (
+    <div className="inventoryBuilder">
+      <b>Add room inventory</b>
+      <select
+        value={roomTypeId}
+        onChange={(e) => setRoomTypeId(e.target.value)}
+      >
+        {roomTypes.map((x) => (
+          <option value={x.id} key={x.id}>
+            {x.name}
+          </option>
+        ))}
+      </select>
+      <input
+        type="number"
+        min="1"
+        value={quantity}
+        onChange={(e) => setQuantity(Number(e.target.value))}
+        title="Quantity"
+      />
+      <input
+        value={prefix}
+        onChange={(e) => setPrefix(e.target.value)}
+        placeholder="Room prefix"
+      />
+      <input
+        value={floor}
+        onChange={(e) => setFloor(e.target.value)}
+        placeholder="Floor"
+      />
+      <button onClick={add}>Add inventory</button>
+    </div>
+  );
 }
 function Reports({ tour, token }) {
   const [type, setType] = useState("overall"),
@@ -697,7 +805,10 @@ function Reports({ tour, token }) {
       api(`/api/admin/reports/${tour.id}?type=${type}`, { headers }),
       api(`/api/admin/inventory/${tour.id}`, { headers }),
     ])
-      .then(([report, stock]) => { setRows(report); setInventory(stock); })
+      .then(([report, stock]) => {
+        setRows(report);
+        setInventory(stock);
+      })
       .catch((e) => setError(e.message));
   }, [type, tour.id, token]);
   const download = async () => {
@@ -738,8 +849,56 @@ function Reports({ tour, token }) {
         />
       </div>
       <div className="inventoryGrid">
-        <div className="card table"><h2>Room inventory remaining</h2><table><thead><tr><th>Type</th><th>Total units</th><th>Available</th><th>People capacity left</th></tr></thead><tbody>{inventory.rooms.map((x) => <tr key={x.room_type_id}><td>{x.name}</td><td>{x.total_units}</td><td><b>{x.available_units}</b></td><td>{x.remaining_capacity}</td></tr>)}</tbody></table></div>
-        <div className="card table"><h2>Bus inventory</h2><table><thead><tr><th>Bus</th><th>Capacity</th><th>Used</th><th>Seats left</th></tr></thead><tbody>{inventory.buses.map((x) => <tr key={x.bus_instance_id}><td>{x.bus_name}</td><td>{x.capacity}</td><td>{x.used_seats}</td><td><b>{x.remaining_seats}</b></td></tr>)}</tbody></table></div>
+        <div className="card table">
+          <h2>Room inventory remaining</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Total units</th>
+                <th>Available</th>
+                <th>People capacity left</th>
+              </tr>
+            </thead>
+            <tbody>
+              {inventory.rooms.map((x) => (
+                <tr key={x.room_type_id}>
+                  <td>{x.name}</td>
+                  <td>{x.total_units}</td>
+                  <td>
+                    <b>{x.available_units}</b>
+                  </td>
+                  <td>{x.remaining_capacity}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="card table">
+          <h2>Bus inventory</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Bus</th>
+                <th>Capacity</th>
+                <th>Used</th>
+                <th>Seats left</th>
+              </tr>
+            </thead>
+            <tbody>
+              {inventory.buses.map((x) => (
+                <tr key={x.bus_instance_id}>
+                  <td>{x.bus_name}</td>
+                  <td>{x.capacity}</td>
+                  <td>{x.used_seats}</td>
+                  <td>
+                    <b>{x.remaining_seats}</b>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
       <div className="filters">
         {["overall", "bus", "self", "room"].map((x) => (
