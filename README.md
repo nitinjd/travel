@@ -38,6 +38,8 @@ The configurable seed room types are AC, Non AC and Dormitory. It contains 16 fo
 
 Final submission runs inside a MySQL transaction. It locks the travel option and selected room inventory with `SELECT ... FOR UPDATE`, rechecks availability, allocates the family, and commits atomically. Concurrent requests therefore cannot reserve the same room or last bus seats.
 
+Under Admin → Trip Setup → Travel Options, the administrator can add or edit individual buses and their seat capacities. Every new bus is immediately included in public availability, registration allocation, admin inventory, dependent reports and the Excel inventory sheet. Automatic bus creation when all configured buses are full remains enabled.
+
 The SQL script recreates the schema and is destructive. Use it for initial setup; do not rerun it after accepting live registrations without first taking a backup.
 
 If the main setup script was already executed, run `database/02_existing_database_updates.sql` instead. It updates the room names, removes extra-bed charges and ensures the initial administrator exists without deleting registrations.
