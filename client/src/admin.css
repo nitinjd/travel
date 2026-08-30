@@ -158,6 +158,96 @@
   margin: 6px 0 0;
   font-size: 13px;
 }
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.68);
+}
+.tourModal {
+  position: relative;
+  width: min(720px, 100%);
+  max-height: 88vh;
+  overflow: auto;
+  padding: 26px;
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28);
+}
+.modalClose {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  background: #eef1f6;
+  color: #172554;
+  font-size: 23px;
+}
+.eyebrow {
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+.tourModal h2 {
+  margin: 7px 45px 12px 0;
+  font-size: 25px;
+}
+.modalMeta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+}
+.modalMeta svg {
+  width: 17px;
+  color: var(--green);
+}
+.planDays {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  margin-top: 20px;
+}
+.planDays section {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f8f9fc;
+}
+.planDays h3 {
+  margin: 0 0 12px;
+  color: #172554;
+}
+.planItem {
+  display: grid;
+  grid-template-columns: 55px 1fr;
+  gap: 8px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+}
+.planItem:last-child {
+  border-bottom: 0;
+}
+.planItem time {
+  color: var(--green);
+  font-weight: 750;
+}
+.planItem span {
+  display: flex;
+  flex-direction: column;
+}
+.planItem small {
+  color: var(--muted);
+  margin-top: 3px;
+}
 .inventoryBuilder {
   display: grid;
   grid-template-columns: 1.2fr 1.4fr 80px 100px 80px auto;
@@ -210,6 +300,9 @@
   }
   .availability,
   .previewDetails {
+    grid-template-columns: 1fr;
+  }
+  .planDays {
     grid-template-columns: 1fr;
   }
 }
