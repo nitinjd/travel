@@ -297,7 +297,14 @@ app.post(
         const roomNumber = `${x.prefix || "ROOM"}-${String(number).padStart(2, "0")}`;
         const [r] = await c.query(
           "INSERT INTO room_inventory(room_type_id,room_number,floor_number,standard_capacity,extra_bed_capacity,notes) VALUES(?,?,?,?,?,?)",
-          [x.room_type_id, roomNumber, x.floor_number || null, x.standard_capacity || type.capacity, x.extra_bed_capacity ?? type.max_extra_beds, x.notes || null],
+          [
+            x.room_type_id,
+            roomNumber,
+            x.floor_number || null,
+            x.standard_capacity || type.capacity,
+            x.extra_bed_capacity ?? type.max_extra_beds,
+            x.notes || null,
+          ],
         );
         ids.push(r.insertId);
       }
@@ -313,7 +320,15 @@ app.put(
     const x = req.body;
     await pool.query(
       "UPDATE room_inventory SET room_number=?,floor_number=?,standard_capacity=?,extra_bed_capacity=?,is_active=?,notes=? WHERE id=?",
-      [x.room_number, x.floor_number || null, x.standard_capacity, x.extra_bed_capacity || 0, x.is_active ? 1 : 0, x.notes || null, req.params.id],
+      [
+        x.room_number,
+        x.floor_number || null,
+        x.standard_capacity,
+        x.extra_bed_capacity || 0,
+        x.is_active ? 1 : 0,
+        x.notes || null,
+        req.params.id,
+      ],
     );
     res.json({ success: true });
   }),
@@ -399,14 +414,11 @@ async function calculateQuote(body, connection = pool) {
     throw Object.assign(new Error("Invalid tour selection"), { status: 400 });
   const units = Math.max(1, Number(body.room_units || 1)),
     extraBeds = Math.max(0, Number(body.extra_beds || 0));
-  if (
-    extraBeds > units * room.max_extra_beds ||
-    count > units * room.capacity + extraBeds
-  )
+  const selectedCapacity =
+    room.charge_type === "PER_BED" ? units : units * room.capacity + extraBeds;
+  if (extraBeds > units * room.max_extra_beds || count > selectedCapacity)
     throw Object.assign(
-      new Error(
-        `Selected accommodation holds only ${units * room.capacity + extraBeds} people`,
-      ),
+      new Error(`Selected accommodation holds only ${selectedCapacity} people`),
       { status: 400 },
     );
   const food = count * Number(tour.food_charge_per_person);
@@ -414,9 +426,7 @@ async function calculateQuote(body, connection = pool) {
     travel.charge_type === "PER_PERSON"
       ? count * Number(travel.charge_amount)
       : Number(travel.charge_amount);
-  const accommodation =
-    units * Number(room.charge_amount) +
-    extraBeds * Number(room.extra_bed_charge);
+  const accommodation = units * Number(room.charge_amount);
   return {
     passenger_count: count,
     food_amount: food,
@@ -476,6 +486,31 @@ async function allocateRooms(
   people,
   extraBeds,
 ) {
+  if (room.charge_type === "PER_BED") {
+    const [inventory] = await c.query(
+      "SELECT ri.*,COALESCE((SELECT SUM(rra.standard_beds_allocated+rra.extra_beds_allocated) FROM registration_room_allocations rra JOIN registrations r ON r.id=rra.registration_id WHERE rra.room_inventory_id=ri.id AND r.status<>'CANCELLED'),0) used FROM room_inventory ri WHERE ri.room_type_id=? AND ri.is_active=1 ORDER BY ri.id FOR UPDATE",
+      [room.id],
+    );
+    let bedsRemaining = units;
+    const roomNumbers = [];
+    for (const unit of inventory) {
+      const beds = Math.min(bedsRemaining, unit.standard_capacity - unit.used);
+      if (beds <= 0) continue;
+      await c.query(
+        "INSERT INTO registration_room_allocations(registration_id,room_inventory_id,standard_beds_allocated,extra_beds_allocated) VALUES(?,?,?,0)",
+        [registrationId, unit.id, beds],
+      );
+      roomNumbers.push(unit.room_number);
+      bedsRemaining -= beds;
+      if (!bedsRemaining) break;
+    }
+    if (bedsRemaining)
+      throw Object.assign(
+        new Error(`Only ${units - bedsRemaining} ${room.name} beds remain`),
+        { status: 409 },
+      );
+    return roomNumbers;
+  }
   const [available] = await c.query(
     "SELECT ri.* FROM room_inventory ri WHERE ri.room_type_id=? AND ri.is_active=1 AND NOT EXISTS(SELECT 1 FROM registration_room_allocations rra JOIN registrations r ON r.id=rra.registration_id WHERE rra.room_inventory_id=ri.id AND r.status<>'CANCELLED') ORDER BY ri.id LIMIT ? FOR UPDATE",
     [room.id, units],
@@ -549,13 +584,11 @@ app.post(
       "SELECT * FROM registrations WHERE id=?",
       [allocation.id],
     );
-    res
-      .status(201)
-      .json({
-        ...registration,
-        assigned_rooms: allocation.rooms,
-        assigned_bus: allocation.bus,
-      });
+    res.status(201).json({
+      ...registration,
+      assigned_rooms: allocation.rooms,
+      assigned_bus: allocation.bus,
+    });
   }),
 );
 const reportQuery = `SELECT r.id,r.family_name,r.contact_name,r.contact_phone,r.room_units,r.extra_beds,r.food_amount,r.travel_amount,r.accommodation_amount,r.total_amount,r.status,t.name tour_name,t.location,vo.name travel_mode,vo.mode travel_mode_type,rt.name room_type,COUNT(p.id) member_count,GROUP_CONCAT(CONCAT(p.name,' (',p.gender,', ',p.age,')') ORDER BY p.id SEPARATOR ', ') members,(SELECT GROUP_CONCAT(CONCAT(ri.room_number,' / Floor ',COALESCE(ri.floor_number,'')) ORDER BY ri.id SEPARATOR ', ') FROM registration_room_allocations rra JOIN room_inventory ri ON ri.id=rra.room_inventory_id WHERE rra.registration_id=r.id) assigned_rooms,(SELECT GROUP_CONCAT(CONCAT(bi.bus_name,' (',rba.seats_allocated,' seats)') SEPARATOR ', ') FROM registration_bus_allocations rba JOIN bus_instances bi ON bi.id=rba.bus_instance_id WHERE rba.registration_id=r.id) assigned_bus FROM registrations r JOIN tours t ON t.id=r.tour_id JOIN travel_options vo ON vo.id=r.travel_option_id JOIN room_types rt ON rt.id=r.room_type_id JOIN passengers p ON p.registration_id=r.id WHERE r.tour_id=? GROUP BY r.id ORDER BY vo.name,r.family_name`;
@@ -568,7 +601,7 @@ async function getReport(tourId, type) {
 async function getInventory(tourId) {
   const [rooms, buses] = await Promise.all([
     pool.query(
-      "SELECT rt.id room_type_id,rt.name,COUNT(ri.id) total_units,SUM(ri.standard_capacity+ri.extra_bed_capacity) total_capacity,SUM(CASE WHEN active_reg.registration_id IS NULL THEN 1 ELSE 0 END) available_units,SUM(CASE WHEN active_reg.registration_id IS NULL THEN ri.standard_capacity+ri.extra_bed_capacity ELSE 0 END) remaining_capacity FROM room_types rt JOIN room_inventory ri ON ri.room_type_id=rt.id AND ri.is_active=1 LEFT JOIN (SELECT rra.room_inventory_id,MAX(rra.registration_id) registration_id FROM registration_room_allocations rra JOIN registrations r ON r.id=rra.registration_id AND r.status<>'CANCELLED' GROUP BY rra.room_inventory_id) active_reg ON active_reg.room_inventory_id=ri.id WHERE rt.tour_id=? GROUP BY rt.id,rt.name ORDER BY rt.sort_order,rt.id",
+      "SELECT room_type_id,name,COUNT(*) total_units,SUM(total_capacity) total_capacity,SUM(CASE WHEN remaining>0 THEN 1 ELSE 0 END) available_units,SUM(remaining) remaining_capacity FROM (SELECT rt.id room_type_id,rt.name,rt.charge_type,rt.sort_order,ri.id,ri.standard_capacity+ri.extra_bed_capacity total_capacity,CASE WHEN rt.charge_type='PER_BED' THEN GREATEST(ri.standard_capacity-COALESCE(used.beds,0),0) WHEN COALESCE(used.bookings,0)>0 THEN 0 ELSE ri.standard_capacity+ri.extra_bed_capacity END remaining FROM room_types rt JOIN room_inventory ri ON ri.room_type_id=rt.id AND ri.is_active=1 LEFT JOIN (SELECT rra.room_inventory_id,SUM(rra.standard_beds_allocated+rra.extra_beds_allocated) beds,COUNT(*) bookings FROM registration_room_allocations rra JOIN registrations r ON r.id=rra.registration_id AND r.status<>'CANCELLED' GROUP BY rra.room_inventory_id) used ON used.room_inventory_id=ri.id WHERE rt.tour_id=?) inventory GROUP BY room_type_id,name,sort_order ORDER BY sort_order,room_type_id",
       [tourId],
     ),
     pool.query(
