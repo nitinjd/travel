@@ -52,6 +52,62 @@
   padding: 16px 18px;
   margin: 0;
 }
+.publicMain {
+  grid-template-columns: 1fr;
+}
+.publicMain .content {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+.availability {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin: -8px auto 22px;
+  max-width: 900px;
+}
+.availability > div {
+  display: flex;
+  gap: 9px;
+  padding: 12px;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+}
+.availability svg {
+  width: 18px;
+  color: var(--green);
+  flex: 0 0 auto;
+}
+.availability span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.availability b {
+  font-size: 12px;
+}
+.availability small {
+  color: var(--muted);
+  margin-top: 3px;
+  font-size: 11px;
+}
+.previewDetails {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 16px;
+}
+.previewDetails > div {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 13px;
+}
+.previewDetails p {
+  color: var(--muted);
+  margin: 6px 0 0;
+  font-size: 13px;
+}
 .inventoryBuilder {
   display: grid;
   grid-template-columns: 1.2fr 1.4fr 80px 100px 80px auto;
@@ -62,8 +118,16 @@
   padding-top: 14px;
 }
 .inventoryBuilder input,
-.inventoryBuilder select { min-width: 0; }
-.inventoryBuilder button { height: 38px; border: 0; border-radius: 7px; background: var(--dark); color: white; }
+.inventoryBuilder select {
+  min-width: 0;
+}
+.inventoryBuilder button {
+  height: 38px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--dark);
+  color: white;
+}
 @media (max-width: 850px) {
   .editRow,
   .roomEdit,
@@ -73,7 +137,12 @@
   .inventoryGrid {
     grid-template-columns: 1fr;
   }
-  .inventoryBuilder { grid-template-columns: 1fr 1fr; }
+  .availability {
+    grid-template-columns: 1fr 1fr;
+  }
+  .inventoryBuilder {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 @media (max-width: 550px) {
   .editRow,
@@ -81,5 +150,11 @@
   .planEdit {
     grid-template-columns: 1fr;
   }
-  .inventoryBuilder { grid-template-columns: 1fr; }
+  .inventoryBuilder {
+    grid-template-columns: 1fr;
+  }
+  .availability,
+  .previewDetails {
+    grid-template-columns: 1fr;
+  }
 }
