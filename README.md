@@ -45,3 +45,5 @@ The SQL script recreates the schema and is destructive. Use it for initial setup
 If the main setup script was already executed, run `database/02_existing_database_updates.sql` instead. It updates the room names, removes extra-bed charges and ensures the initial administrator exists without deleting registrations.
 
 After that, run `database/03_unique_registration_fields.sql` to enforce unique family/group name, mobile number and email within each tour. Resolve any existing duplicate registrations before applying this migration.
+
+Run `database/04_payment_status_comments.sql` to add the admin-only Amount Received checkbox and Comments fields. They appear only in the Overall report grid; leaving the Comments field saves both values. Both columns are included in Excel exports.
