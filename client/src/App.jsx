@@ -709,6 +709,11 @@ function Admin({ tour, token, refresh }) {
               </button>
             </div>
           ))}
+          <BusInventoryManager
+            travelOptions={travels}
+            token={token}
+            onSaved={setMessage}
+          />
         </div>
         <div className="card editor">
           <h2>Room types</h2>
@@ -834,6 +839,131 @@ function Admin({ tour, token, refresh }) {
         </div>
       </div>
     </>
+  );
+}
+function BusInventoryManager({ travelOptions, token, onSaved }) {
+  const busOptions = travelOptions.filter((x) => x.mode === "BUS");
+  const [buses, setBuses] = useState(
+    busOptions.flatMap((x) =>
+      (x.inventory || []).map((bus) => ({ ...bus, option_name: x.name })),
+    ),
+  );
+  const [optionId, setOptionId] = useState(busOptions[0]?.id || "");
+  const [name, setName] = useState("");
+  const [capacity, setCapacity] = useState(busOptions[0]?.capacity || 45);
+  const headers = { Authorization: `Bearer ${token}` };
+  const add = async () => {
+    const created = await api("/api/admin/buses", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        travel_option_id: Number(optionId),
+        bus_name: name,
+        capacity,
+      }),
+    });
+    const option = busOptions.find((x) => x.id === Number(optionId));
+    setBuses([
+      ...buses,
+      {
+        ...created,
+        travel_option_id: Number(optionId),
+        option_name: option?.name,
+        used_seats: 0,
+        remaining_seats: created.capacity,
+        is_active: 1,
+      },
+    ]);
+    setName("");
+    onSaved(`${created.bus_name} added with ${created.capacity} seats`);
+  };
+  const update = async (bus) => {
+    await api(`/api/admin/buses/${bus.bus_instance_id || bus.id}`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify(bus),
+    });
+    onSaved(`${bus.bus_name} updated`);
+  };
+  const patchBus = (id, key, value) =>
+    setBuses((rows) =>
+      rows.map((x) =>
+        (x.bus_instance_id || x.id) === id ? { ...x, [key]: value } : x,
+      ),
+    );
+  if (!busOptions.length) return null;
+  return (
+    <div className="inventorySection">
+      <h3>Bus inventory</h3>
+      {buses.map((bus) => {
+        const id = bus.bus_instance_id || bus.id;
+        return (
+          <div className="busInventoryRow" key={id}>
+            <ConfigField label="Travel option">
+              <input value={bus.option_name || "Bus"} disabled />
+            </ConfigField>
+            <ConfigField label="Bus name">
+              <input
+                value={bus.bus_name}
+                onChange={(e) => patchBus(id, "bus_name", e.target.value)}
+              />
+            </ConfigField>
+            <ConfigField label="Capacity">
+              <input
+                type="number"
+                value={bus.capacity}
+                onChange={(e) =>
+                  patchBus(id, "capacity", Number(e.target.value))
+                }
+              />
+            </ConfigField>
+            <ConfigField label="Allocated">
+              <input value={bus.used_seats || 0} disabled />
+            </ConfigField>
+            <ConfigField label="Remaining">
+              <input value={bus.remaining_seats ?? bus.capacity} disabled />
+            </ConfigField>
+            <button onClick={() => update(bus)}>Save bus</button>
+          </div>
+        );
+      })}
+      <div className="busInventoryRow addBus">
+        <ConfigField label="Travel option">
+          <select
+            value={optionId}
+            onChange={(e) => {
+              setOptionId(e.target.value);
+              const option = busOptions.find(
+                (x) => x.id === Number(e.target.value),
+              );
+              setCapacity(option?.capacity || 45);
+            }}
+          >
+            {busOptions.map((x) => (
+              <option value={x.id} key={x.id}>
+                {x.name}
+              </option>
+            ))}
+          </select>
+        </ConfigField>
+        <ConfigField label="New bus name">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Auto: Bus B"
+          />
+        </ConfigField>
+        <ConfigField label="Seat capacity">
+          <input
+            type="number"
+            min="1"
+            value={capacity}
+            onChange={(e) => setCapacity(Number(e.target.value))}
+          />
+        </ConfigField>
+        <button onClick={add}>Add new bus</button>
+      </div>
+    </div>
   );
 }
 function InventoryBuilder({ roomTypes, token, onSaved }) {
