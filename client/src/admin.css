@@ -253,6 +253,34 @@
   color: var(--muted);
   margin-top: 3px;
 }
+.receivedCell {
+  text-align: center;
+  min-width: 120px;
+}
+.receivedCell input {
+  width: 19px;
+  height: 19px;
+  accent-color: var(--green);
+}
+.commentCell {
+  min-width: 260px;
+}
+.commentCell textarea {
+  width: 100%;
+  min-height: 64px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px;
+  font: inherit;
+  color: #172033;
+  background: white;
+}
+.commentCell textarea:focus {
+  outline: 0;
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px #1d4ed818;
+}
 .inventoryBuilder {
   display: grid;
   grid-template-columns: 1.2fr 1.4fr 80px 100px 80px auto;
