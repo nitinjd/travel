@@ -41,3 +41,5 @@ Final submission runs inside a MySQL transaction. It locks the travel option and
 The SQL script recreates the schema and is destructive. Use it for initial setup; do not rerun it after accepting live registrations without first taking a backup.
 
 If the main setup script was already executed, run `database/02_existing_database_updates.sql` instead. It updates the room names, removes extra-bed charges and ensures the initial administrator exists without deleting registrations.
+
+After that, run `database/03_unique_registration_fields.sql` to enforce unique family/group name, mobile number and email within each tour. Resolve any existing duplicate registrations before applying this migration.
