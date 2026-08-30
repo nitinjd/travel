@@ -11,7 +11,7 @@ One-hosting full-stack tour registration system. The Express server exposes the 
 
 ## Setup
 
-1. Run `database/01_schema_and_seed.sql` in MySQL.
+1. Create or select an existing MySQL database using your hosting control panel. In phpMyAdmin, click that database first and then import `database/01_schema_and_seed.sql`. The script intentionally does not run `CREATE DATABASE` or `USE`, because shared-hosting database users commonly lack those permissions.
 2. Copy `.env.example` to `.env` and enter MySQL, JWT and initial admin values.
 3. Run `npm run install:all`.
 4. Run `npm run build`.
