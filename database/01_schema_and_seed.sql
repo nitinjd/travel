@@ -1,5 +1,8 @@
-CREATE DATABASE IF NOT EXISTS toursetu CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE toursetu;
+-- IMPORTANT FOR SHARED HOSTING / PHPMYADMIN:
+-- Select your existing database in phpMyAdmin before importing this file.
+-- The hosting provider normally does not allow application users to run
+-- CREATE DATABASE or USE another database.
+-- Recommended database collation: utf8mb4_unicode_ci.
 SET FOREIGN_KEY_CHECKS=0;
 DROP TABLE IF EXISTS registration_room_allocations; DROP TABLE IF EXISTS registration_bus_allocations; DROP TABLE IF EXISTS passengers; DROP TABLE IF EXISTS registrations; DROP TABLE IF EXISTS room_inventory; DROP TABLE IF EXISTS bus_instances; DROP TABLE IF EXISTS itinerary_items; DROP TABLE IF EXISTS room_types; DROP TABLE IF EXISTS travel_options; DROP TABLE IF EXISTS tours; DROP TABLE IF EXISTS admins;
 SET FOREIGN_KEY_CHECKS=1;
