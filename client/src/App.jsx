@@ -123,6 +123,7 @@ function Registration({ tour }) {
     [units, setUnits] = useState(1),
     [extra, setExtra] = useState(0),
     [submitted, setSubmitted] = useState(null),
+    [showPlan, setShowPlan] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const travelItem = tour.travelOptions.find((x) => x.id === Number(travel)),
@@ -138,6 +139,36 @@ function Registration({ tour }) {
   }, [people.length, travelItem, roomItem, units, extra, tour]);
   const update = (i, k, v) =>
     setPeople((p) => p.map((x, n) => (n === i ? { ...x, [k]: v } : x)));
+  const advance = () => {
+    setError("");
+    if (step === 1) {
+      const phone = family.contact_phone.replace(/[^0-9+]/g, "");
+      if (
+        !family.family_name.trim() ||
+        !family.contact_name.trim() ||
+        !/^\+?[0-9]{7,15}$/.test(phone)
+      )
+        return setError(
+          "Enter family/group name, contact name and a valid mobile number",
+        );
+      if (
+        family.contact_email &&
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(family.contact_email)
+      )
+        return setError("Enter a valid email address");
+      if (
+        people.some(
+          (x) =>
+            !x.name.trim() ||
+            !x.age ||
+            Number(x.age) < 0 ||
+            Number(x.age) > 120,
+        )
+      )
+        return setError("Enter a valid name and age for every passenger");
+    }
+    setStep(step + 1);
+  };
   const submit = async () => {
     setBusy(true);
     setError("");
@@ -182,7 +213,14 @@ function Registration({ tour }) {
         tag="Family registration"
         title="Plan your complete tour"
         text="Food, travel and stay charges cover the whole tour—not individual days."
+        action={
+          <button className="secondary" onClick={() => setShowPlan(true)}>
+            <CalendarDays />
+            View tour plan
+          </button>
+        }
       />
+      {showPlan && <TourPlan tour={tour} onClose={() => setShowPlan(false)} />}
       <AvailabilityOverview tour={tour} />
       <div className="steps">
         {["Passengers", "Travel", "Stay", "Review"].map((x, i) => (
@@ -407,7 +445,7 @@ function Registration({ tour }) {
           <button
             className="primary"
             disabled={busy}
-            onClick={() => (step < 4 ? setStep(step + 1) : submit())}
+            onClick={() => (step < 4 ? advance() : submit())}
           >
             {busy ? (
               "Submitting…"
@@ -451,12 +489,57 @@ function AvailabilityOverview({ tour }) {
           <span>
             <b>{x.name}</b>
             <small>
-              {x.inventory?.available_units || 0} units •{" "}
-              {x.inventory?.remaining_capacity || 0} people capacity remaining
+              Total: {x.inventory?.total_units || 0} units /{" "}
+              {x.inventory?.total_capacity || 0} people
+            </small>
+            <small>
+              Remaining: {x.inventory?.available_units || 0} units /{" "}
+              {x.inventory?.remaining_capacity || 0} people
             </small>
           </span>
         </div>
       ))}
+    </div>
+  );
+}
+function TourPlan({ tour, onClose }) {
+  const days = [...new Set(tour.itinerary.map((x) => x.day_number))];
+  return (
+    <div className="modalBackdrop" onClick={onClose}>
+      <div className="tourModal" onClick={(e) => e.stopPropagation()}>
+        <button className="modalClose" onClick={onClose}>
+          ×
+        </button>
+        <span className="eyebrow">Tour details</span>
+        <h2>{tour.name}</h2>
+        <p className="modalMeta">
+          <MapPin />
+          {tour.location}
+        </p>
+        <p className="modalMeta">
+          <CalendarDays />
+          {tour.start_date} to {tour.end_date}
+        </p>
+        <div className="planDays">
+          {days.map((day) => (
+            <section key={day}>
+              <h3>Day {day}</h3>
+              {tour.itinerary
+                .filter((x) => x.day_number === day)
+                .map((x) => (
+                  <div className="planItem" key={x.id}>
+                    <time>{String(x.start_time || "").slice(0, 5)}</time>
+                    <span>
+                      <b>{x.title}</b>
+                      <small>{x.location}</small>
+                      {x.notes && <small>{x.notes}</small>}
+                    </span>
+                  </div>
+                ))}
+            </section>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
