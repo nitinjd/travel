@@ -1061,6 +1061,25 @@ function Reports({ tour, token }) {
     a.click();
     URL.revokeObjectURL(u);
   };
+  const updateAdminField = (id, key, value) =>
+    setRows((current) =>
+      current.map((row) => (row.id === id ? { ...row, [key]: value } : row)),
+    );
+  const savePaymentNote = async (row) => {
+    try {
+      await api(`/api/admin/registrations/${row.id}/payment-note`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          amount_received: !!row.amount_received,
+          admin_comments: row.admin_comments || "",
+        }),
+      });
+      setError("");
+    } catch (e) {
+      setError(e.message);
+    }
+  };
   return (
     <>
       <Heading
@@ -1167,6 +1186,12 @@ function Reports({ tour, token }) {
               ].map((x) => (
                 <th key={x}>{x}</th>
               ))}
+              {type === "overall" && (
+                <>
+                  <th>Amount received</th>
+                  <th>Comments</th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -1187,6 +1212,39 @@ function Reports({ tour, token }) {
                 <td>
                   <b>{money(x.total_amount)}</b>
                 </td>
+                {type === "overall" && (
+                  <>
+                    <td className="receivedCell">
+                      <input
+                        aria-label={`Amount received for ${x.family_name}`}
+                        type="checkbox"
+                        checked={!!x.amount_received}
+                        onChange={(e) =>
+                          updateAdminField(
+                            x.id,
+                            "amount_received",
+                            e.target.checked,
+                          )
+                        }
+                      />
+                    </td>
+                    <td className="commentCell">
+                      <textarea
+                        aria-label={`Comments for ${x.family_name}`}
+                        value={x.admin_comments || ""}
+                        placeholder="Add comments; saved when you leave this field"
+                        onChange={(e) =>
+                          updateAdminField(
+                            x.id,
+                            "admin_comments",
+                            e.target.value,
+                          )
+                        }
+                        onBlur={() => savePaymentNote(x)}
+                      />
+                    </td>
+                  </>
+                )}
               </tr>
             ))}
           </tbody>
