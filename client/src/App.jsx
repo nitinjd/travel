@@ -568,39 +568,45 @@ function Admin({ tour, token, refresh }) {
         <div className="card editor">
           <h2>Travel options</h2>
           {travels.map((x) => (
-            <div className="editRow" key={x.id}>
-              <input
-                value={x.name}
-                onChange={(e) =>
-                  patchRow(setTravels, x.id, "name", e.target.value)
-                }
-              />
-              <select
-                value={x.mode}
-                onChange={(e) =>
-                  patchRow(setTravels, x.id, "mode", e.target.value)
-                }
-              >
-                <option>SELF</option>
-                <option>BUS</option>
-                <option>OTHER</option>
-              </select>
-              <input
-                type="number"
-                value={x.charge_amount}
-                title="Charge"
-                onChange={(e) =>
-                  patchRow(setTravels, x.id, "charge_amount", e.target.value)
-                }
-              />
-              <input
-                type="number"
-                value={x.capacity || ""}
-                title="Capacity"
-                onChange={(e) =>
-                  patchRow(setTravels, x.id, "capacity", e.target.value)
-                }
-              />
+            <div className="configCard travelConfig" key={x.id}>
+              <ConfigField label="Travel name">
+                <input
+                  value={x.name}
+                  onChange={(e) =>
+                    patchRow(setTravels, x.id, "name", e.target.value)
+                  }
+                />
+              </ConfigField>
+              <ConfigField label="Mode">
+                <select
+                  value={x.mode}
+                  onChange={(e) =>
+                    patchRow(setTravels, x.id, "mode", e.target.value)
+                  }
+                >
+                  <option>SELF</option>
+                  <option>BUS</option>
+                  <option>OTHER</option>
+                </select>
+              </ConfigField>
+              <ConfigField label="Charge per person">
+                <input
+                  type="number"
+                  value={x.charge_amount}
+                  onChange={(e) =>
+                    patchRow(setTravels, x.id, "charge_amount", e.target.value)
+                  }
+                />
+              </ConfigField>
+              <ConfigField label="Seat capacity">
+                <input
+                  type="number"
+                  value={x.capacity || ""}
+                  onChange={(e) =>
+                    patchRow(setTravels, x.id, "capacity", e.target.value)
+                  }
+                />
+              </ConfigField>
               <label className="check">
                 <input
                   type="checkbox"
@@ -624,64 +630,74 @@ function Admin({ tour, token, refresh }) {
         <div className="card editor">
           <h2>Room types</h2>
           {rooms.map((x) => (
-            <div className="editRow roomEdit" key={x.id}>
-              <input
-                value={x.name}
-                onChange={(e) =>
-                  patchRow(setRooms, x.id, "name", e.target.value)
-                }
-              />
-              <select
-                value={x.charge_type}
-                onChange={(e) =>
-                  patchRow(setRooms, x.id, "charge_type", e.target.value)
-                }
-              >
-                <option>PER_BED</option>
-                <option>PER_ROOM</option>
-              </select>
-              <input
-                type="number"
-                value={x.charge_amount}
-                title="Charge"
-                onChange={(e) =>
-                  patchRow(setRooms, x.id, "charge_amount", e.target.value)
-                }
-              />
-              <input
-                type="number"
-                value={x.capacity}
-                title="Capacity"
-                onChange={(e) =>
-                  patchRow(setRooms, x.id, "capacity", e.target.value)
-                }
-              />
-              <label className="check">
+            <div className="configCard roomConfig" key={x.id}>
+              <ConfigField label="Room type">
                 <input
-                  type="checkbox"
-                  checked={!!x.is_ac}
+                  value={x.name}
                   onChange={(e) =>
-                    patchRow(setRooms, x.id, "is_ac", e.target.checked)
+                    patchRow(setRooms, x.id, "name", e.target.value)
                   }
                 />
-                AC
-              </label>
-              <label className="check">
-                <input
-                  type="checkbox"
-                  checked={!!x.extra_bed_allowed}
+              </ConfigField>
+              <ConfigField label="Charging basis">
+                <select
+                  value={x.charge_type}
                   onChange={(e) =>
-                    patchRow(
-                      setRooms,
-                      x.id,
-                      "extra_bed_allowed",
-                      e.target.checked,
-                    )
+                    patchRow(setRooms, x.id, "charge_type", e.target.value)
+                  }
+                >
+                  <option value="PER_BED">Per bed</option>
+                  <option value="PER_ROOM">Per room</option>
+                </select>
+              </ConfigField>
+              <ConfigField label="Charge (₹)">
+                <input
+                  type="number"
+                  value={x.charge_amount}
+                  onChange={(e) =>
+                    patchRow(setRooms, x.id, "charge_amount", e.target.value)
                   }
                 />
-                Extra bed
-              </label>
+              </ConfigField>
+              <ConfigField label="People capacity">
+                <input
+                  type="number"
+                  value={x.capacity}
+                  onChange={(e) =>
+                    patchRow(setRooms, x.id, "capacity", e.target.value)
+                  }
+                />
+              </ConfigField>
+              <div className="configChecks">
+                <span>Facilities</span>
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={!!x.is_ac}
+                    onChange={(e) =>
+                      patchRow(setRooms, x.id, "is_ac", e.target.checked)
+                    }
+                  />
+                  Air-conditioned
+                </label>
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={!!x.extra_bed_allowed}
+                    onChange={(e) =>
+                      patchRow(
+                        setRooms,
+                        x.id,
+                        "extra_bed_allowed",
+                        e.target.checked,
+                      )
+                    }
+                  />
+                  Free floor bed
+                </label>
+              </div>
               <button
+                className="saveConfig"
                 onClick={() => save(`/api/admin/room-types/${x.id}`, x, x.name)}
               >
                 Save
@@ -761,36 +777,45 @@ function InventoryBuilder({ roomTypes, token, onSaved }) {
     );
   };
   return (
-    <div className="inventoryBuilder">
-      <b>Add room inventory</b>
-      <select
-        value={roomTypeId}
-        onChange={(e) => setRoomTypeId(e.target.value)}
-      >
-        {roomTypes.map((x) => (
-          <option value={x.id} key={x.id}>
-            {x.name}
-          </option>
-        ))}
-      </select>
-      <input
-        type="number"
-        min="1"
-        value={quantity}
-        onChange={(e) => setQuantity(Number(e.target.value))}
-        title="Quantity"
-      />
-      <input
-        value={prefix}
-        onChange={(e) => setPrefix(e.target.value)}
-        placeholder="Room prefix"
-      />
-      <input
-        value={floor}
-        onChange={(e) => setFloor(e.target.value)}
-        placeholder="Floor"
-      />
-      <button onClick={add}>Add inventory</button>
+    <div className="inventorySection">
+      <h3>Add room inventory</h3>
+      <div className="inventoryBuilder">
+        <ConfigField label="Room type">
+          <select
+            value={roomTypeId}
+            onChange={(e) => setRoomTypeId(e.target.value)}
+          >
+            {roomTypes.map((x) => (
+              <option value={x.id} key={x.id}>
+                {x.name}
+              </option>
+            ))}
+          </select>
+        </ConfigField>
+        <ConfigField label="Units to add">
+          <input
+            type="number"
+            min="1"
+            value={quantity}
+            onChange={(e) => setQuantity(Number(e.target.value))}
+          />
+        </ConfigField>
+        <ConfigField label="Room prefix">
+          <input
+            value={prefix}
+            onChange={(e) => setPrefix(e.target.value)}
+            placeholder="e.g. AC"
+          />
+        </ConfigField>
+        <ConfigField label="Floor">
+          <input
+            value={floor}
+            onChange={(e) => setFloor(e.target.value)}
+            placeholder="e.g. 2"
+          />
+        </ConfigField>
+        <button onClick={add}>Add inventory</button>
+      </div>
     </div>
   );
 }
@@ -966,6 +991,14 @@ function Field({ label, value, onChange, type = "text" }) {
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value)}
       />
+    </label>
+  );
+}
+function ConfigField({ label, children }) {
+  return (
+    <label className="configField">
+      <span>{label}</span>
+      {children}
     </label>
   );
 }
