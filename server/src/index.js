@@ -227,6 +227,61 @@ app.put(
   }),
 );
 app.post(
+  "/api/admin/buses",
+  requireAdmin,
+  asyncRoute(async (req, res) => {
+    const x = req.body;
+    const created = await transaction(async (c) => {
+      const [[option]] = await c.query(
+        "SELECT * FROM travel_options WHERE id=? AND mode='BUS' FOR UPDATE",
+        [x.travel_option_id],
+      );
+      if (!option)
+        throw Object.assign(new Error("Bus travel option not found"), {
+          status: 404,
+        });
+      const [[{ number }]] = await c.query(
+        "SELECT COALESCE(MAX(bus_number),0)+1 number FROM bus_instances WHERE travel_option_id=?",
+        [x.travel_option_id],
+      );
+      const name = String(x.bus_name || `Bus ${busLetter(number)}`).trim();
+      const capacity = Math.max(1, Number(x.capacity || option.capacity || 45));
+      const [r] = await c.query(
+        "INSERT INTO bus_instances(travel_option_id,bus_number,bus_name,capacity) VALUES(?,?,?,?)",
+        [x.travel_option_id, number, name, capacity],
+      );
+      return { id: r.insertId, bus_number: number, bus_name: name, capacity };
+    });
+    res.status(201).json(created);
+  }),
+);
+app.put(
+  "/api/admin/buses/:id",
+  requireAdmin,
+  asyncRoute(async (req, res) => {
+    const x = req.body;
+    const [[usage]] = await pool.query(
+      "SELECT COALESCE(SUM(CASE WHEN r.status<>'CANCELLED' THEN rba.seats_allocated ELSE 0 END),0) used FROM registration_bus_allocations rba JOIN registrations r ON r.id=rba.registration_id WHERE rba.bus_instance_id=?",
+      [req.params.id],
+    );
+    if (Number(x.capacity) < Number(usage.used))
+      throw Object.assign(
+        new Error(`Capacity cannot be below ${usage.used} allocated seats`),
+        { status: 409 },
+      );
+    await pool.query(
+      "UPDATE bus_instances SET bus_name=?,capacity=?,is_active=? WHERE id=?",
+      [
+        String(x.bus_name).trim(),
+        Number(x.capacity),
+        x.is_active !== false ? 1 : 0,
+        req.params.id,
+      ],
+    );
+    res.json({ success: true });
+  }),
+);
+app.post(
   "/api/admin/room-types",
   requireAdmin,
   asyncRoute(async (req, res) => {
@@ -756,12 +811,10 @@ app.use((req, res, next) =>
 app.use((error, req, res, next) => {
   console.error(error);
   if (error.code === "ER_DUP_ENTRY")
-    return res
-      .status(409)
-      .json({
-        message:
-          "Family name, mobile number or email is already registered for this tour",
-      });
+    return res.status(409).json({
+      message:
+        "Family name, mobile number or email is already registered for this tour",
+    });
   res
     .status(error.status || 500)
     .json({ message: error.message || "Internal server error" });
