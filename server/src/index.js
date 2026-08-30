@@ -543,9 +543,54 @@ async function allocateRooms(
 app.post(
   "/api/registrations",
   asyncRoute(async (req, res) => {
+    const familyName = String(req.body.family_name || "").trim();
+    const contactName = String(req.body.contact_name || "").trim();
+    const phone = String(req.body.contact_phone || "").replace(/[^0-9+]/g, "");
+    const email =
+      String(req.body.contact_email || "")
+        .trim()
+        .toLowerCase() || null;
+    if (!familyName || !contactName || !/^\+?[0-9]{7,15}$/.test(phone))
+      throw Object.assign(
+        new Error("Enter family name, contact name and a valid mobile number"),
+        { status: 400 },
+      );
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      throw Object.assign(new Error("Enter a valid email address"), {
+        status: 400,
+      });
+    req.body = {
+      ...req.body,
+      family_name: familyName,
+      contact_name: contactName,
+      contact_phone: phone,
+      contact_email: email,
+    };
     const allocation = await transaction(async (c) => {
       const q = await calculateQuote(req.body, c),
         b = req.body;
+      const [[duplicate]] = await c.query(
+        "SELECT family_name,contact_phone,contact_email FROM registrations WHERE tour_id=? AND (LOWER(TRIM(family_name))=LOWER(?) OR contact_phone=? OR (? IS NOT NULL AND LOWER(contact_email)=LOWER(?))) LIMIT 1",
+        [
+          b.tour_id,
+          b.family_name,
+          b.contact_phone,
+          b.contact_email,
+          b.contact_email,
+        ],
+      );
+      if (duplicate) {
+        const field =
+          duplicate.family_name.toLowerCase() === b.family_name.toLowerCase()
+            ? "Family / Group name"
+            : duplicate.contact_phone === b.contact_phone
+              ? "Mobile number"
+              : "Email address";
+        throw Object.assign(
+          new Error(`${field} is already registered for this tour`),
+          { status: 409 },
+        );
+      }
       const [r] = await c.query(
         "INSERT INTO registrations(tour_id,family_name,contact_name,contact_phone,contact_email,travel_option_id,room_type_id,room_units,extra_beds,food_amount,travel_amount,accommodation_amount,total_amount,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'SUBMITTED')",
         [
@@ -710,6 +755,13 @@ app.use((req, res, next) =>
 );
 app.use((error, req, res, next) => {
   console.error(error);
+  if (error.code === "ER_DUP_ENTRY")
+    return res
+      .status(409)
+      .json({
+        message:
+          "Family name, mobile number or email is already registered for this tour",
+      });
   res
     .status(error.status || 500)
     .json({ message: error.message || "Internal server error" });
