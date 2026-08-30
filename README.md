@@ -23,3 +23,11 @@ For development, run the API with `npm run dev` and the client separately with `
 ## Reports
 
 Admin reports support overall, bus, self-travel and room views. Excel downloads include family totals, member details, travel, accommodation, charges, and writable Room No./Floor columns.
+
+## Inventory and concurrency
+
+The seed contains 16 four-person Non-AC rooms, six eight-bed Non-AC rooms, 40 four-person AC rooms with one optional floor bed each, and Bus A with 45 seats. The administrator can add room inventory from Trip Setup. When a bus fills, submission automatically creates Bus B, Bus C and so on with the configured capacity.
+
+Final submission runs inside a MySQL transaction. It locks the travel option and selected room inventory with `SELECT ... FOR UPDATE`, rechecks availability, allocates the family, and commits atomically. Concurrent requests therefore cannot reserve the same room or last bus seats.
+
+The SQL script recreates the schema and is destructive. Use it for initial setup; do not rerun it after accepting live registrations without first taking a backup.
