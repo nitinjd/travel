@@ -691,7 +691,7 @@ app.post(
     });
   }),
 );
-const reportQuery = `SELECT r.id,r.family_name,r.contact_name,r.contact_phone,r.room_units,r.extra_beds,r.food_amount,r.travel_amount,r.accommodation_amount,r.total_amount,r.status,t.name tour_name,t.location,vo.name travel_mode,vo.mode travel_mode_type,rt.name room_type,COUNT(p.id) member_count,GROUP_CONCAT(CONCAT(p.name,' (',p.gender,', ',p.age,')') ORDER BY p.id SEPARATOR ', ') members,(SELECT GROUP_CONCAT(CONCAT(ri.room_number,' / Floor ',COALESCE(ri.floor_number,'')) ORDER BY ri.id SEPARATOR ', ') FROM registration_room_allocations rra JOIN room_inventory ri ON ri.id=rra.room_inventory_id WHERE rra.registration_id=r.id) assigned_rooms,(SELECT GROUP_CONCAT(CONCAT(bi.bus_name,' (',rba.seats_allocated,' seats)') SEPARATOR ', ') FROM registration_bus_allocations rba JOIN bus_instances bi ON bi.id=rba.bus_instance_id WHERE rba.registration_id=r.id) assigned_bus FROM registrations r JOIN tours t ON t.id=r.tour_id JOIN travel_options vo ON vo.id=r.travel_option_id JOIN room_types rt ON rt.id=r.room_type_id JOIN passengers p ON p.registration_id=r.id WHERE r.tour_id=? GROUP BY r.id ORDER BY vo.name,r.family_name`;
+const reportQuery = `SELECT r.id,r.family_name,r.contact_name,r.contact_phone,r.room_units,r.extra_beds,r.food_amount,r.travel_amount,r.accommodation_amount,r.total_amount,r.amount_received,r.admin_comments,r.status,t.name tour_name,t.location,vo.name travel_mode,vo.mode travel_mode_type,rt.name room_type,COUNT(p.id) member_count,GROUP_CONCAT(CONCAT(p.name,' (',p.gender,', ',p.age,')') ORDER BY p.id SEPARATOR ', ') members,(SELECT GROUP_CONCAT(CONCAT(ri.room_number,' / Floor ',COALESCE(ri.floor_number,'')) ORDER BY ri.id SEPARATOR ', ') FROM registration_room_allocations rra JOIN room_inventory ri ON ri.id=rra.room_inventory_id WHERE rra.registration_id=r.id) assigned_rooms,(SELECT GROUP_CONCAT(CONCAT(bi.bus_name,' (',rba.seats_allocated,' seats)') SEPARATOR ', ') FROM registration_bus_allocations rba JOIN bus_instances bi ON bi.id=rba.bus_instance_id WHERE rba.registration_id=r.id) assigned_bus FROM registrations r JOIN tours t ON t.id=r.tour_id JOIN travel_options vo ON vo.id=r.travel_option_id JOIN room_types rt ON rt.id=r.room_type_id JOIN passengers p ON p.registration_id=r.id WHERE r.tour_id=? GROUP BY r.id ORDER BY vo.name,r.family_name`;
 async function getReport(tourId, type) {
   const [rows] = await pool.query(reportQuery, [tourId]);
   if (type === "bus") return rows.filter((x) => x.travel_mode_type === "BUS");
@@ -740,6 +740,25 @@ app.patch(
     res.json({ success: true });
   }),
 );
+app.patch(
+  "/api/admin/registrations/:id/payment-note",
+  requireAdmin,
+  asyncRoute(async (req, res) => {
+    const comments =
+      String(req.body.admin_comments || "")
+        .trim()
+        .slice(0, 1000) || null;
+    await pool.query(
+      "UPDATE registrations SET amount_received=?,admin_comments=? WHERE id=?",
+      [req.body.amount_received ? 1 : 0, comments, req.params.id],
+    );
+    res.json({
+      success: true,
+      amount_received: req.body.amount_received ? 1 : 0,
+      admin_comments: comments,
+    });
+  }),
+);
 app.get(
   "/api/admin/reports/:tourId/excel",
   requireAdmin,
@@ -764,6 +783,8 @@ app.get(
       "Travel Amount": x.travel_amount,
       "Accommodation Amount": x.accommodation_amount,
       "Family Total": x.total_amount,
+      "Amount Received": x.amount_received ? "Yes" : "No",
+      "Admin Comments": x.admin_comments || "",
     }));
     const ws = XLSX.utils.json_to_sheet(data),
       wb = XLSX.utils.book_new();
