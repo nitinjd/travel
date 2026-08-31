@@ -187,6 +187,20 @@ function TourImageCarousel({ itinerary }) {
     </section>
   );
 }
+function calculateAccommodation(room, passengerCount) {
+  if (!room) return { units: 0, extra: 0 };
+  if (room.charge_type === "PER_BED")
+    return { units: passengerCount, extra: 0 };
+  const capacity = Math.max(1, Number(room.capacity || 1));
+  const maxExtra = room.extra_bed_allowed
+    ? Math.max(0, Number(room.max_extra_beds || 0))
+    : 0;
+  const units = Math.max(1, Math.ceil(passengerCount / (capacity + maxExtra)));
+  return {
+    units,
+    extra: Math.max(0, passengerCount - units * capacity),
+  };
+}
 function Registration({ tour }) {
   const [step, setStep] = useState(1),
     [family, setFamily] = useState({
@@ -198,8 +212,6 @@ function Registration({ tour }) {
     [people, setPeople] = useState([{ name: "", gender: "MALE", age: "" }]),
     [travel, setTravel] = useState(tour.travelOptions[0]?.id),
     [room, setRoom] = useState(tour.roomTypes[0]?.id),
-    [units, setUnits] = useState(1),
-    [extra, setExtra] = useState(0),
     [submitted, setSubmitted] = useState(null),
     [showPlan, setShowPlan] = useState(false),
     [busy, setBusy] = useState(false),
@@ -207,13 +219,19 @@ function Registration({ tour }) {
     [error, setError] = useState("");
   const travelItem = tour.travelOptions.find((x) => x.id === Number(travel)),
     roomItem = tour.roomTypes.find((x) => x.id === Number(room));
+  const { units, extra } = useMemo(
+    () => calculateAccommodation(roomItem, people.length),
+    [roomItem, people.length],
+  );
   const quote = useMemo(() => {
     const food = people.length * tour.food_charge_per_person,
       tv =
         travelItem?.charge_type === "PER_PERSON"
           ? people.length * travelItem.charge_amount
           : travelItem?.charge_amount || 0,
-      stay = units * (roomItem?.charge_amount || 0);
+      stay =
+        units * (roomItem?.charge_amount || 0) +
+        extra * (roomItem?.extra_bed_charge || 0);
     return { food, tv, stay, total: food + tv + stay };
   }, [people.length, travelItem, roomItem, units, extra, tour]);
   const update = (i, k, v) =>
@@ -431,11 +449,7 @@ function Registration({ tour }) {
                 <button
                   key={x.id}
                   className={Number(room) === x.id ? "selected" : ""}
-                  onClick={() => {
-                    setRoom(x.id);
-                    setUnits(1);
-                    setExtra(0);
-                  }}
+                  onClick={() => setRoom(x.id)}
                 >
                   <span>{x.is_ac ? "AC" : "○"}</span>
                   <b>{x.name}</b>
@@ -447,23 +461,25 @@ function Registration({ tour }) {
                   {x.charge_type === "PER_BED" && (
                     <small>Shared room • charged only for selected beds</small>
                   )}
+                  {x.extra_bed_allowed === 1 && (
+                    <small>
+                      Up to {x.max_extra_beds} additional bed(s) per room at{" "}
+                      {money(x.extra_bed_charge)} each
+                    </small>
+                  )}
+                  {x.description && <small>{x.description}</small>}
                 </button>
               ))}
             </div>
-            <Counter
-              label={`Number of ${roomItem?.charge_type === "PER_BED" ? "beds" : "rooms"}`}
-              value={units}
-              set={setUnits}
-            />
-            {roomItem?.extra_bed_allowed === 1 && (
-              <Counter
-                label={`Extra beds (${money(roomItem.extra_bed_charge)} each)`}
-                value={extra}
-                set={(v) =>
-                  setExtra(Math.min(v, units * roomItem.max_extra_beds))
-                }
-              />
-            )}
+            <div className="automaticAllocation" role="status">
+              <b>Automatically calculated for {people.length} passenger(s)</b>
+              <span>
+                {roomItem?.charge_type === "PER_BED"
+                  ? `${units} bed(s)`
+                  : `${units} room(s)${extra ? ` + ${extra} additional bed(s)` : ""}`}
+              </span>
+              <strong>{money(quote.stay)}</strong>
+            </div>
           </>
         )}
         {step === 4 && (
@@ -477,7 +493,10 @@ function Registration({ tour }) {
               <Summary label="Family" value={family.family_name} />
               <Summary label="Members" value={people.length} />
               <Summary label="Travel" value={travelItem?.name} />
-              <Summary label="Stay" value={`${roomItem?.name} × ${units}`} />
+              <Summary
+                label="Stay"
+                value={`${roomItem?.name} × ${units} ${roomItem?.charge_type === "PER_BED" ? "bed(s)" : "room(s)"}${extra ? ` + ${extra} extra bed(s)` : ""}`}
+              />
             </div>
             <div className="previewDetails">
               <div>
@@ -708,6 +727,7 @@ function Admin({ tour, token, refresh }) {
       charge_type: "PER_BED",
       charge_amount: 500,
       capacity: 4,
+      description: "Shared air-conditioned room; charged per occupied bed.",
       is_ac: true,
       extra_bed_allowed: false,
       max_extra_beds: 0,
@@ -733,6 +753,8 @@ function Admin({ tour, token, refresh }) {
       setMessage(
         error.message.includes("google_maps_url")
           ? "Please execute database/05_itinerary_images_maps.sql, then try again."
+          : error.message.includes("description")
+            ? "Please execute database/06_room_descriptions_extra_beds.sql, then try again."
           : `Could not save ${label}: ${error.message}`,
       );
     } finally {
@@ -978,6 +1000,15 @@ function Admin({ tour, token, refresh }) {
                   }
                 />
               </ConfigField>
+              <ConfigField label="Room description" className="roomDescription">
+                <input
+                  value={x.description || ""}
+                  placeholder="Shown to users during registration"
+                  onChange={(e) =>
+                    patchRow(setRooms, x.id, "description", e.target.value)
+                  }
+                />
+              </ConfigField>
               <div className="configChecks">
                 <span>Facilities</span>
                 <label className="check">
@@ -1003,9 +1034,43 @@ function Admin({ tour, token, refresh }) {
                       )
                     }
                   />
-                  Free floor bed
+                  Allow additional bed
                 </label>
               </div>
+              {x.extra_bed_allowed ? (
+                <>
+                  <ConfigField label="Extra beds per room">
+                    <input
+                      type="number"
+                      min="0"
+                      value={x.max_extra_beds || 0}
+                      onChange={(e) =>
+                        patchRow(
+                          setRooms,
+                          x.id,
+                          "max_extra_beds",
+                          Number(e.target.value),
+                        )
+                      }
+                    />
+                  </ConfigField>
+                  <ConfigField label="Charge per extra bed (₹)">
+                    <input
+                      type="number"
+                      min="0"
+                      value={x.extra_bed_charge || 0}
+                      onChange={(e) =>
+                        patchRow(
+                          setRooms,
+                          x.id,
+                          "extra_bed_charge",
+                          Number(e.target.value),
+                        )
+                      }
+                    />
+                  </ConfigField>
+                </>
+              ) : null}
               <button
                 className="saveConfig"
                 disabled={!!saving}
@@ -1063,6 +1128,15 @@ function Admin({ tour, token, refresh }) {
                 }
               />
             </ConfigField>
+            <ConfigField label="Room description" className="roomDescription">
+              <input
+                value={newRoom.description || ""}
+                placeholder="Shown to users during registration"
+                onChange={(e) =>
+                  setNewRoom({ ...newRoom, description: e.target.value })
+                }
+              />
+            </ConfigField>
             <div className="configChecks">
               <span>Facilities</span>
               <label className="check">
@@ -1075,7 +1149,50 @@ function Admin({ tour, token, refresh }) {
                 />
                 Air-conditioned
               </label>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={newRoom.extra_bed_allowed}
+                  onChange={(e) =>
+                    setNewRoom({
+                      ...newRoom,
+                      extra_bed_allowed: e.target.checked,
+                    })
+                  }
+                />
+                Allow additional bed
+              </label>
             </div>
+            {newRoom.extra_bed_allowed && (
+              <>
+                <ConfigField label="Extra beds per room">
+                  <input
+                    type="number"
+                    min="0"
+                    value={newRoom.max_extra_beds || 0}
+                    onChange={(e) =>
+                      setNewRoom({
+                        ...newRoom,
+                        max_extra_beds: Number(e.target.value),
+                      })
+                    }
+                  />
+                </ConfigField>
+                <ConfigField label="Charge per extra bed (₹)">
+                  <input
+                    type="number"
+                    min="0"
+                    value={newRoom.extra_bed_charge || 0}
+                    onChange={(e) =>
+                      setNewRoom({
+                        ...newRoom,
+                        extra_bed_charge: Number(e.target.value),
+                      })
+                    }
+                  />
+                </ConfigField>
+              </>
+            )}
             <button disabled={!!saving} onClick={addRoomType}>
               {saving === "/api/admin/room-types" ? "Adding…" : "Add room type"}
             </button>
@@ -1619,9 +1736,9 @@ function Field({ label, value, onChange, type = "text" }) {
     </label>
   );
 }
-function ConfigField({ label, children }) {
+function ConfigField({ label, children, className = "" }) {
   return (
-    <label className="configField">
+    <label className={`configField ${className}`}>
       <span>{label}</span>
       {children}
     </label>
