@@ -699,6 +699,13 @@ async function allocateRooms(
       "SELECT ri.*,COALESCE((SELECT SUM(rra.standard_beds_allocated+rra.extra_beds_allocated) FROM registration_room_allocations rra JOIN registrations r ON r.id=rra.registration_id WHERE rra.room_inventory_id=ri.id AND r.status<>'CANCELLED'),0) used FROM room_inventory ri WHERE ri.room_type_id=? AND ri.is_active=1 ORDER BY ri.id FOR UPDATE",
       [room.id],
     );
+    if (!inventory.length)
+      throw Object.assign(
+        new Error(
+          `No physical inventory is configured for ${room.name}. The administrator must add room units first.`,
+        ),
+        { status: 409 },
+      );
     let bedsRemaining = units;
     const roomNumbers = [];
     for (const unit of inventory) {
