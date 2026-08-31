@@ -3,6 +3,18 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "scripts": { "start": "node src/index.js", "dev": "node --watch src/index.js" },
-  "dependencies": { "bcryptjs": "latest", "cors": "latest", "dotenv": "latest", "express": "latest", "jsonwebtoken": "latest", "mysql2": "latest", "xlsx": "latest" }
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "bcryptjs": "latest",
+    "cors": "latest",
+    "dotenv": "latest",
+    "express": "latest",
+    "jsonwebtoken": "latest",
+    "multer": "latest",
+    "mysql2": "latest",
+    "xlsx": "latest"
+  }
 }
