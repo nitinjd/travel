@@ -755,7 +755,7 @@ function Admin({ tour, token, refresh }) {
           ? "Please execute database/05_itinerary_images_maps.sql, then try again."
           : error.message.includes("description")
             ? "Please execute database/06_room_descriptions_extra_beds.sql, then try again."
-          : `Could not save ${label}: ${error.message}`,
+            : `Could not save ${label}: ${error.message}`,
       );
     } finally {
       setSaving("");
@@ -794,13 +794,27 @@ function Admin({ tour, token, refresh }) {
     setMessageType("success");
     setMessage(`Image removed from ${item.title}`);
   };
-  const childSaved = (value) => {
-    setMessageType("success");
-    setMessage(value);
-  };
   const notify = (value, type = "success") => {
     setMessageType(type);
     setMessage(value);
+  };
+  const removeMaster = async (entity, item, setRows) => {
+    const label = item.name || item.title;
+    if (!window.confirm(`Delete "${label}"? This action cannot be undone.`))
+      return;
+    const url = `/api/admin/${entity}/${item.id}`;
+    setSaving(url);
+    setMessage("");
+    try {
+      await api(url, { method: "DELETE", headers });
+      setRows((current) => current.filter((row) => row.id !== item.id));
+      notify(`${label} deleted successfully`);
+      await refresh();
+    } catch (error) {
+      notify(`Could not delete ${label}: ${error.message}`, "error");
+    } finally {
+      setSaving("");
+    }
   };
   const addRoomType = async () => {
     const url = "/api/admin/room-types";
@@ -941,22 +955,31 @@ function Admin({ tour, token, refresh }) {
                 />
                 AC
               </label>
-              <button
-                disabled={!!saving}
-                onClick={() =>
-                  save(`/api/admin/travel-options/${x.id}`, x, x.name)
-                }
-              >
-                {saving === `/api/admin/travel-options/${x.id}`
-                  ? "Saving…"
-                  : "Save"}
-              </button>
+              <div className="configActions">
+                <button
+                  disabled={!!saving}
+                  onClick={() =>
+                    save(`/api/admin/travel-options/${x.id}`, x, x.name)
+                  }
+                >
+                  {saving === `/api/admin/travel-options/${x.id}`
+                    ? "Saving…"
+                    : "Save"}
+                </button>
+                <button
+                  className="danger"
+                  disabled={!!saving}
+                  onClick={() => removeMaster("travel", x, setTravels)}
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           ))}
           <BusInventoryManager
             travelOptions={travels}
             token={token}
-            onSaved={childSaved}
+            onSaved={notify}
           />
         </div>
         <div className="card editor">
@@ -1071,15 +1094,25 @@ function Admin({ tour, token, refresh }) {
                   </ConfigField>
                 </>
               ) : null}
-              <button
-                className="saveConfig"
-                disabled={!!saving}
-                onClick={() => save(`/api/admin/room-types/${x.id}`, x, x.name)}
-              >
-                {saving === `/api/admin/room-types/${x.id}`
-                  ? "Saving…"
-                  : "Save"}
-              </button>
+              <div className="configActions">
+                <button
+                  disabled={!!saving}
+                  onClick={() =>
+                    save(`/api/admin/room-types/${x.id}`, x, x.name)
+                  }
+                >
+                  {saving === `/api/admin/room-types/${x.id}`
+                    ? "Saving…"
+                    : "Save"}
+                </button>
+                <button
+                  className="danger"
+                  disabled={!!saving}
+                  onClick={() => removeMaster("room", x, setRooms)}
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           ))}
           <div className="configCard roomConfig newRoomType">
@@ -1238,16 +1271,25 @@ function Admin({ tour, token, refresh }) {
                     patchRow(setPlan, x.id, "google_maps_url", v)
                   }
                 />
-                <button
-                  disabled={!!saving}
-                  onClick={() =>
-                    save(`/api/admin/itinerary/${x.id}`, x, x.title)
-                  }
-                >
-                  {saving === `/api/admin/itinerary/${x.id}`
-                    ? "Saving…"
-                    : "Save"}
-                </button>
+                <div className="configActions">
+                  <button
+                    disabled={!!saving}
+                    onClick={() =>
+                      save(`/api/admin/itinerary/${x.id}`, x, x.title)
+                    }
+                  >
+                    {saving === `/api/admin/itinerary/${x.id}`
+                      ? "Saving…"
+                      : "Save"}
+                  </button>
+                  <button
+                    className="danger"
+                    disabled={!!saving}
+                    onClick={() => removeMaster("itinerary", x, setPlan)}
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
               <div className="planImages">
                 <label className="imagePicker">
@@ -1331,6 +1373,22 @@ function BusInventoryManager({ travelOptions, token, onSaved }) {
     });
     onSaved(`${bus.bus_name} updated`);
   };
+  const remove = async (bus) => {
+    const id = bus.bus_instance_id || bus.id;
+    if (!window.confirm(`Delete "${bus.bus_name}"?`)) return;
+    try {
+      await api(`/api/admin/buses/${id}`, {
+        method: "DELETE",
+        headers,
+      });
+      setBuses((current) =>
+        current.filter((item) => (item.bus_instance_id || item.id) !== id),
+      );
+      onSaved(`${bus.bus_name} deleted successfully`);
+    } catch (error) {
+      onSaved(`Could not delete ${bus.bus_name}: ${error.message}`, "error");
+    }
+  };
   const patchBus = (id, key, value) =>
     setBuses((rows) =>
       rows.map((x) =>
@@ -1369,7 +1427,12 @@ function BusInventoryManager({ travelOptions, token, onSaved }) {
             <ConfigField label="Remaining">
               <input value={bus.remaining_seats ?? bus.capacity} disabled />
             </ConfigField>
-            <button onClick={() => update(bus)}>Save bus</button>
+            <div className="configActions">
+              <button onClick={() => update(bus)}>Save bus</button>
+              <button className="danger" onClick={() => remove(bus)}>
+                Delete
+              </button>
+            </div>
           </div>
         );
       })}
