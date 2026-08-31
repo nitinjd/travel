@@ -67,7 +67,70 @@
   grid-template-columns: 1.3fr 0.9fr 0.6fr 0.6fr auto auto auto;
 }
 .planEdit {
-  grid-template-columns: 70px 120px 1.5fr 1fr auto;
+  grid-template-columns: 70px 120px 1.2fr 1fr 1.5fr auto;
+  align-items: end;
+}
+.itineraryConfig {
+  padding: 15px;
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f8f9fc;
+}
+.planImages {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  margin-top: 12px;
+}
+.imagePicker {
+  width: min(340px, 100%);
+  margin: 0;
+}
+.imagePicker input {
+  padding: 8px;
+  background: white;
+}
+.imageThumbs,
+.itineraryGallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.imageThumbs > span {
+  position: relative;
+}
+.imageThumbs img,
+.itineraryGallery img {
+  display: block;
+  width: 76px;
+  height: 58px;
+  object-fit: cover;
+  border-radius: 7px;
+}
+.imageThumbs button {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 21px;
+  height: 21px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: white;
+  background: #b42318;
+}
+.planLocation {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 700;
+}
+.itineraryGallery {
+  margin-top: 9px;
 }
 .editRow input,
 .editRow select {
@@ -113,6 +176,85 @@
 .publicMain .content {
   max-width: 1180px;
   margin: 0 auto;
+}
+.heroCarousel {
+  position: relative;
+  height: clamp(230px, 34vw, 410px);
+  margin: 0 0 28px;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #172554;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
+}
+.heroCarousel > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.heroCarousel::after {
+  content: "";
+  position: absolute;
+  inset: 45% 0 0;
+  background: linear-gradient(transparent, rgba(15, 23, 42, 0.82));
+  pointer-events: none;
+}
+.heroCaption {
+  position: absolute;
+  z-index: 2;
+  left: 24px;
+  bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  color: white;
+}
+.heroCaption b {
+  font-size: 21px;
+}
+.heroCaption span {
+  margin-top: 4px;
+  opacity: 0.88;
+}
+.heroPrevious,
+.heroNext {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  color: white;
+  background: rgba(15, 23, 42, 0.58);
+  transform: translateY(-50%);
+}
+.heroPrevious {
+  left: 15px;
+}
+.heroNext {
+  right: 15px;
+}
+.heroDots {
+  position: absolute;
+  z-index: 3;
+  right: 22px;
+  bottom: 25px;
+  display: flex;
+  gap: 6px;
+}
+.heroDots button {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+}
+.heroDots button.active {
+  width: 22px;
+  border-radius: 5px;
+  background: white;
 }
 .availability {
   display: grid;
