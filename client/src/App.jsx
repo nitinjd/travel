@@ -15,12 +15,25 @@ import {
 } from "lucide-react";
 const money = (n) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
 const api = async (url, options = {}) => {
-  const r = await fetch(url, {
-    ...options,
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-  });
-  if (!r.ok) throw new Error((await r.json()).message || "Request failed");
-  return r.json();
+  try {
+    const r = await fetch(url, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+    });
+    const result = await r.json().catch(() => ({}));
+    if (!r.ok)
+      throw new Error(result.message || `Request failed (${r.status})`);
+    return result;
+  } catch (error) {
+    if (error instanceof TypeError)
+      throw new Error(
+        "Cannot connect to the server. Please refresh the page or try again shortly.",
+      );
+    throw error;
+  }
 };
 export default function App() {
   const isAdminPage = window.location.pathname.startsWith("/admin");
@@ -71,7 +84,12 @@ export default function App() {
           </nav>
         )}
         <section className="content">
-          {error && <div className="alert">{error}</div>}
+          {error && (
+            <div className="alert appError">
+              <span>{error}</span>
+              <button onClick={() => window.location.reload()}>Retry</button>
+            </div>
+          )}
           {!tour ? (
             <div className="card">Loading tour…</div>
           ) : !isAdminPage ? (
@@ -185,6 +203,7 @@ function Registration({ tour }) {
     [submitted, setSubmitted] = useState(null),
     [showPlan, setShowPlan] = useState(false),
     [busy, setBusy] = useState(false),
+    [stepNotice, setStepNotice] = useState(""),
     [error, setError] = useState("");
   const travelItem = tour.travelOptions.find((x) => x.id === Number(travel)),
     roomItem = tour.roomTypes.find((x) => x.id === Number(room));
@@ -201,6 +220,7 @@ function Registration({ tour }) {
     setPeople((p) => p.map((x, n) => (n === i ? { ...x, [k]: v } : x)));
   const advance = () => {
     setError("");
+    setStepNotice("");
     if (step === 1) {
       const phone = family.contact_phone.replace(/[^0-9+]/g, "");
       if (
@@ -227,6 +247,8 @@ function Registration({ tour }) {
       )
         return setError("Enter a valid name and age for every passenger");
     }
+    const completed = ["Passenger details", "Transportation", "Accommodation"];
+    setStepNotice(`${completed[step - 1]} saved. Continue to the next step.`);
     setStep(step + 1);
   };
   const submit = async () => {
@@ -293,6 +315,11 @@ function Registration({ tour }) {
       </div>
       <div className="card form">
         {error && <div className="alert">{error}</div>}
+        {stepNotice && (
+          <div className="notice formNotice" role="status" aria-live="polite">
+            <b>✓</b> {stepNotice}
+          </div>
+        )}
         {step === 1 && (
           <>
             <Title
@@ -496,7 +523,13 @@ function Registration({ tour }) {
         )}
         <footer>
           {step > 1 ? (
-            <button className="secondary" onClick={() => setStep(step - 1)}>
+            <button
+              className="secondary"
+              onClick={() => {
+                setStepNotice("");
+                setStep(step - 1);
+              }}
+            >
               <ChevronLeft />
               Back
             </button>
@@ -668,14 +701,30 @@ function Admin({ tour, token, refresh }) {
     [travels, setTravels] = useState(tour.travelOptions),
     [rooms, setRooms] = useState(tour.roomTypes),
     [plan, setPlan] = useState(tour.itinerary),
-    [message, setMessage] = useState("");
+    [message, setMessage] = useState(""),
+    [messageType, setMessageType] = useState("success"),
+    [saving, setSaving] = useState("");
   const headers = { Authorization: `Bearer ${token}` };
   const patchRow = (set, id, key, value) =>
     set((rows) => rows.map((x) => (x.id === id ? { ...x, [key]: value } : x)));
   const save = async (url, data, label) => {
-    await api(url, { method: "PUT", headers, body: JSON.stringify(data) });
-    setMessage(`${label} saved`);
-    refresh();
+    setSaving(url);
+    setMessage("");
+    try {
+      await api(url, { method: "PUT", headers, body: JSON.stringify(data) });
+      setMessageType("success");
+      setMessage(`${label} saved successfully`);
+      await refresh();
+    } catch (error) {
+      setMessageType("error");
+      setMessage(
+        error.message.includes("google_maps_url")
+          ? "Please execute database/05_itinerary_images_maps.sql, then try again."
+          : `Could not save ${label}: ${error.message}`,
+      );
+    } finally {
+      setSaving("");
+    }
   };
   const uploadPlanImages = async (item, files) => {
     if (!files.length) return;
@@ -693,6 +742,7 @@ function Admin({ tour, token, refresh }) {
     const result = await response.json();
     if (!response.ok) throw new Error(result.message || "Image upload failed");
     patchRow(setPlan, item.id, "images", [...(item.images || []), ...result]);
+    setMessageType("success");
     setMessage(`${result.length} image(s) uploaded for ${item.title}`);
   };
   const removePlanImage = async (item, imageId) => {
@@ -706,7 +756,12 @@ function Admin({ tour, token, refresh }) {
       "images",
       (item.images || []).filter((image) => image.id !== imageId),
     );
+    setMessageType("success");
     setMessage(`Image removed from ${item.title}`);
+  };
+  const childSaved = (value) => {
+    setMessageType("success");
+    setMessage(value);
   };
   return (
     <>
@@ -717,13 +772,25 @@ function Admin({ tour, token, refresh }) {
         action={
           <button
             className="primary"
+            disabled={!!saving}
             onClick={() => save(`/api/admin/tours/${tour.id}`, t, "Tour")}
           >
-            Save tour
+            {saving === `/api/admin/tours/${tour.id}`
+              ? "Saving tour…"
+              : "Save tour"}
           </button>
         }
       />
-      {message && <div className="notice">{message}</div>}
+      {message && (
+        <div
+          className={messageType === "error" ? "alert" : "notice"}
+          role="status"
+          aria-live="polite"
+        >
+          {messageType === "success" ? "✓ " : ""}
+          {message}
+        </div>
+      )}
       <div className="adminGrid">
         <div className="card">
           <h2>Tour details</h2>
@@ -817,18 +884,21 @@ function Admin({ tour, token, refresh }) {
                 AC
               </label>
               <button
+                disabled={!!saving}
                 onClick={() =>
                   save(`/api/admin/travel-options/${x.id}`, x, x.name)
                 }
               >
-                Save
+                {saving === `/api/admin/travel-options/${x.id}`
+                  ? "Saving…"
+                  : "Save"}
               </button>
             </div>
           ))}
           <BusInventoryManager
             travelOptions={travels}
             token={token}
-            onSaved={setMessage}
+            onSaved={childSaved}
           />
         </div>
         <div className="card editor">
@@ -902,16 +972,19 @@ function Admin({ tour, token, refresh }) {
               </div>
               <button
                 className="saveConfig"
+                disabled={!!saving}
                 onClick={() => save(`/api/admin/room-types/${x.id}`, x, x.name)}
               >
-                Save
+                {saving === `/api/admin/room-types/${x.id}`
+                  ? "Saving…"
+                  : "Save"}
               </button>
             </div>
           ))}
           <InventoryBuilder
             roomTypes={rooms}
             token={token}
-            onSaved={setMessage}
+            onSaved={childSaved}
           />
         </div>
         <div className="card wide editor">
@@ -949,11 +1022,14 @@ function Admin({ tour, token, refresh }) {
                   }
                 />
                 <button
+                  disabled={!!saving}
                   onClick={() =>
                     save(`/api/admin/itinerary/${x.id}`, x, x.title)
                   }
                 >
-                  Save
+                  {saving === `/api/admin/itinerary/${x.id}`
+                    ? "Saving…"
+                    : "Save"}
                 </button>
               </div>
               <div className="planImages">
@@ -964,8 +1040,11 @@ function Admin({ tour, token, refresh }) {
                     accept="image/jpeg,image/png,image/webp,image/gif"
                     multiple
                     onChange={(e) =>
-                      uploadPlanImages(x, e.target.files).catch((error) =>
-                        setMessage(error.message),
+                      uploadPlanImages(x, e.target.files).catch(
+                        (error) => (
+                          setMessageType("error"),
+                          setMessage(error.message)
+                        ),
                       )
                     }
                   />
