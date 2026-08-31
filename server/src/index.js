@@ -329,10 +329,11 @@ app.post(
   asyncRoute(async (req, res) => {
     const x = req.body;
     const [r] = await pool.query(
-      "INSERT INTO room_types(tour_id,name,charge_type,charge_amount,capacity,is_ac,extra_bed_allowed,extra_bed_charge,max_extra_beds,is_active,sort_order) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+      "INSERT INTO room_types(tour_id,name,description,charge_type,charge_amount,capacity,is_ac,extra_bed_allowed,extra_bed_charge,max_extra_beds,is_active,sort_order) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
       [
         x.tour_id,
         x.name,
+        x.description || null,
         x.charge_type,
         x.charge_amount,
         x.capacity,
@@ -353,9 +354,10 @@ app.put(
   asyncRoute(async (req, res) => {
     const x = req.body;
     await pool.query(
-      "UPDATE room_types SET name=?,charge_type=?,charge_amount=?,capacity=?,is_ac=?,extra_bed_allowed=?,extra_bed_charge=?,max_extra_beds=?,is_active=?,sort_order=? WHERE id=?",
+      "UPDATE room_types SET name=?,description=?,charge_type=?,charge_amount=?,capacity=?,is_ac=?,extra_bed_allowed=?,extra_bed_charge=?,max_extra_beds=?,is_active=?,sort_order=? WHERE id=?",
       [
         x.name,
+        x.description || null,
         x.charge_type,
         x.charge_amount,
         x.capacity,
@@ -574,21 +576,24 @@ async function calculateQuote(body, connection = pool) {
   );
   if (!tour || !travel || !room)
     throw Object.assign(new Error("Invalid tour selection"), { status: 400 });
-  const units = Math.max(1, Number(body.room_units || 1)),
-    extraBeds = Math.max(0, Number(body.extra_beds || 0));
-  const selectedCapacity =
-    room.charge_type === "PER_BED" ? units : units * room.capacity + extraBeds;
-  if (extraBeds > units * room.max_extra_beds || count > selectedCapacity)
-    throw Object.assign(
-      new Error(`Selected accommodation holds only ${selectedCapacity} people`),
-      { status: 400 },
-    );
+  const capacity = Math.max(1, Number(room.capacity || 1));
+  const maxExtra = room.extra_bed_allowed
+    ? Math.max(0, Number(room.max_extra_beds || 0))
+    : 0;
+  const units =
+    room.charge_type === "PER_BED"
+      ? count
+      : Math.max(1, Math.ceil(count / (capacity + maxExtra)));
+  const extraBeds =
+    room.charge_type === "PER_BED" ? 0 : Math.max(0, count - units * capacity);
   const food = count * Number(tour.food_charge_per_person);
   const travelAmount =
     travel.charge_type === "PER_PERSON"
       ? count * Number(travel.charge_amount)
       : Number(travel.charge_amount);
-  const accommodation = units * Number(room.charge_amount);
+  const accommodation =
+    units * Number(room.charge_amount) +
+    extraBeds * Number(room.extra_bed_charge || 0);
   return {
     passenger_count: count,
     food_amount: food,
