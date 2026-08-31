@@ -3,12 +3,24 @@ import cors from "cors";
 import dotenv from "dotenv";
 import bcrypt from "bcryptjs";
 import XLSX from "xlsx";
+import multer from "multer";
 import path from "path";
 import { fileURLToPath } from "url";
 import { pool, transaction } from "./db.js";
 import { requireAdmin, signAdmin } from "./auth.js";
 dotenv.config();
 const app = express();
+const imageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 10 },
+  fileFilter: (req, file, cb) =>
+    cb(
+      null,
+      ["image/jpeg", "image/png", "image/webp", "image/gif"].includes(
+        file.mimetype,
+      ),
+    ),
+});
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 const asyncRoute = (fn) => (req, res, next) =>
@@ -67,20 +79,25 @@ app.get(
       "SELECT * FROM tours WHERE status='ACTIVE' ORDER BY start_date LIMIT 1",
     );
     if (!tour) return res.status(404).json({ message: "No active tour" });
-    const [travelOptions, roomTypes, itinerary] = await Promise.all([
-      pool.query(
-        "SELECT * FROM travel_options WHERE tour_id=? AND is_active=1 ORDER BY sort_order,id",
-        [tour.id],
-      ),
-      pool.query(
-        "SELECT * FROM room_types WHERE tour_id=? AND is_active=1 ORDER BY sort_order,id",
-        [tour.id],
-      ),
-      pool.query(
-        "SELECT * FROM itinerary_items WHERE tour_id=? ORDER BY day_number,start_time,id",
-        [tour.id],
-      ),
-    ]);
+    const [travelOptions, roomTypes, itinerary, itineraryImages] =
+      await Promise.all([
+        pool.query(
+          "SELECT * FROM travel_options WHERE tour_id=? AND is_active=1 ORDER BY sort_order,id",
+          [tour.id],
+        ),
+        pool.query(
+          "SELECT * FROM room_types WHERE tour_id=? AND is_active=1 ORDER BY sort_order,id",
+          [tour.id],
+        ),
+        pool.query(
+          "SELECT * FROM itinerary_items WHERE tour_id=? ORDER BY day_number,start_time,id",
+          [tour.id],
+        ),
+        pool.query(
+          "SELECT ii.id,ii.itinerary_item_id,ii.file_name,ii.sort_order FROM itinerary_images ii JOIN itinerary_items item ON item.id=ii.itinerary_item_id WHERE item.tour_id=? ORDER BY ii.sort_order,ii.id",
+          [tour.id],
+        ),
+      ]);
     const inventory = await getInventory(tour.id);
     const travel = travelOptions[0].map((x) => ({
       ...x,
@@ -99,8 +116,28 @@ app.get(
       ...tour,
       travelOptions: travel,
       roomTypes: rooms,
-      itinerary: itinerary[0],
+      itinerary: itinerary[0].map((item) => ({
+        ...item,
+        images: itineraryImages[0]
+          .filter((image) => image.itinerary_item_id === item.id)
+          .map((image) => ({
+            ...image,
+            url: `/api/itinerary-images/${image.id}`,
+          })),
+      })),
     });
+  }),
+);
+app.get(
+  "/api/itinerary-images/:id",
+  asyncRoute(async (req, res) => {
+    const [[image]] = await pool.query(
+      "SELECT mime_type,image_data FROM itinerary_images WHERE id=?",
+      [req.params.id],
+    );
+    if (!image) return res.status(404).end();
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.type(image.mime_type).send(image.image_data);
   }),
 );
 app.get(
@@ -394,12 +431,13 @@ app.post(
   asyncRoute(async (req, res) => {
     const x = req.body;
     const [r] = await pool.query(
-      "INSERT INTO itinerary_items(tour_id,day_number,title,location,start_time,end_time,notes) VALUES(?,?,?,?,?,?,?)",
+      "INSERT INTO itinerary_items(tour_id,day_number,title,location,google_maps_url,start_time,end_time,notes) VALUES(?,?,?,?,?,?,?,?)",
       [
         x.tour_id,
         x.day_number,
         x.title,
         x.location,
+        x.google_maps_url || null,
         x.start_time || null,
         x.end_time || null,
         x.notes || null,
@@ -414,17 +452,64 @@ app.put(
   asyncRoute(async (req, res) => {
     const x = req.body;
     await pool.query(
-      "UPDATE itinerary_items SET day_number=?,title=?,location=?,start_time=?,end_time=?,notes=? WHERE id=?",
+      "UPDATE itinerary_items SET day_number=?,title=?,location=?,google_maps_url=?,start_time=?,end_time=?,notes=? WHERE id=?",
       [
         x.day_number,
         x.title,
         x.location || null,
+        x.google_maps_url || null,
         x.start_time || null,
         x.end_time || null,
         x.notes || null,
         req.params.id,
       ],
     );
+    res.json({ success: true });
+  }),
+);
+app.post(
+  "/api/admin/itinerary/:id/images",
+  requireAdmin,
+  imageUpload.array("images", 10),
+  asyncRoute(async (req, res) => {
+    const [[{ count }]] = await pool.query(
+      "SELECT COUNT(*) count FROM itinerary_images WHERE itinerary_item_id=?",
+      [req.params.id],
+    );
+    if (Number(count) + (req.files?.length || 0) > 10)
+      return res
+        .status(400)
+        .json({
+          message: "Maximum 10 images are allowed for each itinerary item",
+        });
+    const created = [];
+    for (const file of req.files || []) {
+      const [r] = await pool.query(
+        "INSERT INTO itinerary_images(itinerary_item_id,file_name,mime_type,image_data,sort_order) VALUES(?,?,?,?,?)",
+        [
+          req.params.id,
+          file.originalname,
+          file.mimetype,
+          file.buffer,
+          Number(count) + created.length,
+        ],
+      );
+      created.push({
+        id: r.insertId,
+        file_name: file.originalname,
+        url: `/api/itinerary-images/${r.insertId}`,
+      });
+    }
+    res.status(201).json(created);
+  }),
+);
+app.delete(
+  "/api/admin/itinerary-images/:id",
+  requireAdmin,
+  asyncRoute(async (req, res) => {
+    await pool.query("DELETE FROM itinerary_images WHERE id=?", [
+      req.params.id,
+    ]);
     res.json({ success: true });
   }),
 );
