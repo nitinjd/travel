@@ -303,6 +303,15 @@ footer {
   background: #f1f5ff;
   box-shadow: 0 0 0 2px #1d4ed814;
 }
+.rooms button.unavailable {
+  border-style: dashed;
+  background: #f8f8fa;
+  opacity: 0.72;
+}
+.rooms button.unavailable .soldOut {
+  color: #9e3229;
+  font-weight: 750;
+}
 .options button > span {
   display: flex;
   flex-direction: column;
