@@ -79,25 +79,30 @@ app.get(
       "SELECT * FROM tours WHERE status='ACTIVE' ORDER BY start_date LIMIT 1",
     );
     if (!tour) return res.status(404).json({ message: "No active tour" });
-    const [travelOptions, roomTypes, itinerary, itineraryImages] =
-      await Promise.all([
-        pool.query(
-          "SELECT * FROM travel_options WHERE tour_id=? AND is_active=1 ORDER BY sort_order,id",
-          [tour.id],
-        ),
-        pool.query(
-          "SELECT * FROM room_types WHERE tour_id=? AND is_active=1 ORDER BY sort_order,id",
-          [tour.id],
-        ),
-        pool.query(
-          "SELECT * FROM itinerary_items WHERE tour_id=? ORDER BY day_number,start_time,id",
-          [tour.id],
-        ),
-        pool.query(
-          "SELECT ii.id,ii.itinerary_item_id,ii.file_name,ii.sort_order FROM itinerary_images ii JOIN itinerary_items item ON item.id=ii.itinerary_item_id WHERE item.tour_id=? ORDER BY ii.sort_order,ii.id",
-          [tour.id],
-        ),
-      ]);
+    const [travelOptions, roomTypes, itinerary] = await Promise.all([
+      pool.query(
+        "SELECT * FROM travel_options WHERE tour_id=? AND is_active=1 ORDER BY sort_order,id",
+        [tour.id],
+      ),
+      pool.query(
+        "SELECT * FROM room_types WHERE tour_id=? AND is_active=1 ORDER BY sort_order,id",
+        [tour.id],
+      ),
+      pool.query(
+        "SELECT * FROM itinerary_items WHERE tour_id=? ORDER BY day_number,start_time,id",
+        [tour.id],
+      ),
+    ]);
+    let itineraryImages = [[]];
+    try {
+      itineraryImages = await pool.query(
+        "SELECT ii.id,ii.itinerary_item_id,ii.file_name,ii.sort_order FROM itinerary_images ii JOIN itinerary_items item ON item.id=ii.itinerary_item_id WHERE item.tour_id=? ORDER BY ii.sort_order,ii.id",
+        [tour.id],
+      );
+    } catch (error) {
+      // Keep the existing application usable until migration 05 is executed.
+      if (error.code !== "ER_NO_SUCH_TABLE") throw error;
+    }
     const inventory = await getInventory(tour.id);
     const travel = travelOptions[0].map((x) => ({
       ...x,
@@ -477,11 +482,9 @@ app.post(
       [req.params.id],
     );
     if (Number(count) + (req.files?.length || 0) > 10)
-      return res
-        .status(400)
-        .json({
-          message: "Maximum 10 images are allowed for each itinerary item",
-        });
+      return res.status(400).json({
+        message: "Maximum 10 images are allowed for each itinerary item",
+      });
     const created = [];
     for (const file of req.files || []) {
       const [r] = await pool.query(
