@@ -219,6 +219,15 @@ function Registration({ tour }) {
     [error, setError] = useState("");
   const travelItem = tour.travelOptions.find((x) => x.id === Number(travel)),
     roomItem = tour.roomTypes.find((x) => x.id === Number(room));
+  useEffect(() => {
+    if (Number(roomItem?.inventory?.remaining_capacity || 0) >= people.length)
+      return;
+    const available = tour.roomTypes.find(
+      (item) =>
+        Number(item.inventory?.remaining_capacity || 0) >= people.length,
+    );
+    if (available) setRoom(available.id);
+  }, [people.length, room, roomItem, tour.roomTypes]);
   const { units, extra } = useMemo(
     () => calculateAccommodation(roomItem, people.length),
     [roomItem, people.length],
@@ -265,6 +274,13 @@ function Registration({ tour }) {
       )
         return setError("Enter a valid name and age for every passenger");
     }
+    if (
+      step === 3 &&
+      Number(roomItem?.inventory?.remaining_capacity || 0) < people.length
+    )
+      return setError(
+        `${roomItem?.name || "Selected accommodation"} has no capacity for ${people.length} passenger(s). Please select another option or ask the administrator to add room inventory.`,
+      );
     const completed = ["Passenger details", "Transportation", "Accommodation"];
     setStepNotice(`${completed[step - 1]} saved. Continue to the next step.`);
     setStep(step + 1);
@@ -445,31 +461,47 @@ function Registration({ tour }) {
               cost={money(quote.stay)}
             />
             <div className="rooms">
-              {tour.roomTypes.map((x) => (
-                <button
-                  key={x.id}
-                  className={Number(room) === x.id ? "selected" : ""}
-                  onClick={() => setRoom(x.id)}
-                >
-                  <span>{x.is_ac ? "AC" : "○"}</span>
-                  <b>{x.name}</b>
-                  <small>
-                    {money(x.charge_amount)} • {x.capacity} people/unit •{" "}
-                    {x.inventory?.available_units || 0} units available (
-                    {x.inventory?.remaining_capacity || 0} people)
-                  </small>
-                  {x.charge_type === "PER_BED" && (
-                    <small>Shared room • charged only for selected beds</small>
-                  )}
-                  {x.extra_bed_allowed === 1 && (
+              {tour.roomTypes.map((x) => {
+                const available =
+                  Number(x.inventory?.remaining_capacity || 0) >= people.length;
+                return (
+                  <button
+                    key={x.id}
+                    disabled={!available}
+                    className={`${Number(room) === x.id ? "selected" : ""} ${!available ? "unavailable" : ""}`}
+                    onClick={() => {
+                      setError("");
+                      setRoom(x.id);
+                    }}
+                  >
+                    <span>{x.is_ac ? "AC" : "○"}</span>
+                    <b>{x.name}</b>
                     <small>
-                      Up to {x.max_extra_beds} additional bed(s) per room at{" "}
-                      {money(x.extra_bed_charge)} each
+                      {money(x.charge_amount)} • {x.capacity} people/unit •{" "}
+                      {x.inventory?.available_units || 0} units available (
+                      {x.inventory?.remaining_capacity || 0} people)
                     </small>
-                  )}
-                  {x.description && <small>{x.description}</small>}
-                </button>
-              ))}
+                    {x.charge_type === "PER_BED" && (
+                      <small>
+                        Shared room • charged only for selected beds
+                      </small>
+                    )}
+                    {x.extra_bed_allowed === 1 && (
+                      <small>
+                        Up to {x.max_extra_beds} additional bed(s) per room at{" "}
+                        {money(x.extra_bed_charge)} each
+                      </small>
+                    )}
+                    {x.description && <small>{x.description}</small>}
+                    {!available && (
+                      <small className="soldOut">
+                        Unavailable for {people.length} passenger(s) — no
+                        beds/rooms remain
+                      </small>
+                    )}
+                  </button>
+                );
+              })}
             </div>
             <div className="automaticAllocation" role="status">
               <b>Automatically calculated for {people.length} passenger(s)</b>
@@ -737,6 +769,12 @@ function Admin({ tour, token, refresh }) {
     [message, setMessage] = useState(""),
     [messageType, setMessageType] = useState("success"),
     [saving, setSaving] = useState("");
+  useEffect(() => {
+    setT({ ...tour });
+    setTravels(tour.travelOptions);
+    setRooms(tour.roomTypes);
+    setPlan(tour.itinerary);
+  }, [tour]);
   const headers = { Authorization: `Bearer ${token}` };
   const patchRow = (set, id, key, value) =>
     set((rows) => rows.map((x) => (x.id === id ? { ...x, [key]: value } : x)));
@@ -1482,6 +1520,9 @@ function InventoryBuilder({ roomTypes, token, onSaved, onAdded }) {
   const [floor, setFloor] = useState("");
   const [adding, setAdding] = useState(false);
   const selectedRoom = roomTypes.find((x) => x.id === Number(roomTypeId));
+  useEffect(() => {
+    if (!selectedRoom && roomTypes[0]) setRoomTypeId(roomTypes[0].id);
+  }, [roomTypes, selectedRoom]);
   const add = async () => {
     if (!selectedRoom || quantity < 1 || !prefix.trim())
       return onSaved(
@@ -1515,6 +1556,24 @@ function InventoryBuilder({ roomTypes, token, onSaved, onAdded }) {
   return (
     <div className="inventorySection">
       <h3>Add room inventory</h3>
+      {selectedRoom && (
+        <div
+          className={`inventoryStatus ${Number(selectedRoom.inventory?.total_units || 0) === 0 ? "empty" : ""}`}
+        >
+          <b>{selectedRoom.name}</b>
+          <span>
+            Current inventory: {selectedRoom.inventory?.total_units || 0}{" "}
+            room(s) /unit(s), {selectedRoom.inventory?.remaining_capacity || 0}{" "}
+            bed(s) remaining
+          </span>
+          {Number(selectedRoom.inventory?.total_units || 0) === 0 && (
+            <small>
+              Registration cannot use this room type until inventory is added
+              below.
+            </small>
+          )}
+        </div>
+      )}
       <div className="inventoryBuilder">
         <ConfigField label="Room type">
           <select
