@@ -541,14 +541,55 @@ app.delete(
   "/api/admin/:entity/:id",
   requireAdmin,
   asyncRoute(async (req, res) => {
-    const tables = {
-      travel: "travel_options",
-      room: "room_types",
-      itinerary: "itinerary_items",
-    };
-    const table = tables[req.params.entity];
-    if (!table) return res.status(400).json({ message: "Invalid entity" });
-    await pool.query(`DELETE FROM ${table} WHERE id=?`, [req.params.id]);
+    const { entity, id } = req.params;
+    if (!["travel", "room", "itinerary", "buses"].includes(entity))
+      return res.status(400).json({ message: "Invalid entity" });
+    if (entity === "buses") {
+      const [[{ used }]] = await pool.query(
+        "SELECT COUNT(*) used FROM registration_bus_allocations WHERE bus_instance_id=?",
+        [id],
+      );
+      if (Number(used) > 0)
+        return res.status(409).json({
+          message: `This bus has ${used} registration allocation(s) and cannot be deleted.`,
+        });
+      const [result] = await pool.query(
+        "DELETE FROM bus_instances WHERE id=?",
+        [id],
+      );
+      if (!result.affectedRows)
+        return res.status(404).json({ message: "Bus not found" });
+      return res.json({ success: true });
+    }
+    if (entity === "itinerary") {
+      await pool.query("DELETE FROM itinerary_items WHERE id=?", [id]);
+      return res.json({ success: true });
+    }
+    const table = entity === "travel" ? "travel_options" : "room_types";
+    const registrationColumn =
+      entity === "travel" ? "travel_option_id" : "room_type_id";
+    const [[{ used }]] = await pool.query(
+      `SELECT COUNT(*) used FROM registrations WHERE ${registrationColumn}=?`,
+      [id],
+    );
+    if (Number(used) > 0)
+      return res.status(409).json({
+        message: `This ${entity === "travel" ? "travel option" : "room type"} is used by ${used} registration(s) and cannot be deleted.`,
+      });
+    const [[item]] = await pool.query(
+      `SELECT tour_id FROM ${table} WHERE id=?`,
+      [id],
+    );
+    if (!item) return res.status(404).json({ message: "Item not found" });
+    const [[{ remaining }]] = await pool.query(
+      `SELECT COUNT(*) remaining FROM ${table} WHERE tour_id=? AND id<>? AND is_active=1`,
+      [item.tour_id, id],
+    );
+    if (!Number(remaining))
+      return res.status(409).json({
+        message: `At least one active ${entity === "travel" ? "travel option" : "room type"} must remain.`,
+      });
+    await pool.query(`DELETE FROM ${table} WHERE id=?`, [id]);
     res.json({ success: true });
   }),
 );
