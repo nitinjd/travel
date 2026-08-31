@@ -377,6 +377,10 @@ app.post(
   asyncRoute(async (req, res) => {
     const x = req.body;
     const quantity = Math.max(1, Math.min(200, Number(x.quantity || 1)));
+    const prefix = String(x.prefix || "ROOM")
+      .trim()
+      .replace(/[^a-zA-Z0-9_-]/g, "-")
+      .slice(0, 35);
     const created = await transaction(async (c) => {
       const [[type]] = await c.query(
         "SELECT * FROM room_types WHERE id=? FOR UPDATE",
@@ -384,21 +388,36 @@ app.post(
       );
       if (!type)
         throw Object.assign(new Error("Room type not found"), { status: 404 });
+      const capacity = Number(x.standard_capacity || type.capacity);
+      if (!Number.isInteger(capacity) || capacity < 1 || capacity > 100)
+        throw Object.assign(
+          new Error("Beds per room must be between 1 and 100"),
+          { status: 400 },
+        );
       const [[{ count }]] = await c.query(
         "SELECT COUNT(*) count FROM room_inventory WHERE room_type_id=?",
         [x.room_type_id],
       );
       const ids = [];
+      let nextNumber = Number(count) + 1;
       for (let i = 1; i <= quantity; i++) {
-        const number = Number(count) + i;
-        const roomNumber = `${x.prefix || "ROOM"}-${String(number).padStart(2, "0")}`;
+        let roomNumber;
+        while (true) {
+          roomNumber = `${prefix || "ROOM"}-${String(nextNumber).padStart(2, "0")}`;
+          const [[existing]] = await c.query(
+            "SELECT id FROM room_inventory WHERE room_type_id=? AND room_number=?",
+            [x.room_type_id, roomNumber],
+          );
+          nextNumber++;
+          if (!existing) break;
+        }
         const [r] = await c.query(
           "INSERT INTO room_inventory(room_type_id,room_number,floor_number,standard_capacity,extra_bed_capacity,notes) VALUES(?,?,?,?,?,?)",
           [
             x.room_type_id,
             roomNumber,
             x.floor_number || null,
-            x.standard_capacity || type.capacity,
+            capacity,
             x.extra_bed_capacity ?? type.max_extra_beds,
             x.notes || null,
           ],
@@ -779,7 +798,7 @@ app.post(
     });
   }),
 );
-const reportQuery = `SELECT r.id,r.family_name,r.contact_name,r.contact_phone,r.room_units,r.extra_beds,r.food_amount,r.travel_amount,r.accommodation_amount,r.total_amount,r.amount_received,r.admin_comments,r.status,t.name tour_name,t.location,vo.name travel_mode,vo.mode travel_mode_type,rt.name room_type,COUNT(p.id) member_count,GROUP_CONCAT(CONCAT(p.name,' (',p.gender,', ',p.age,')') ORDER BY p.id SEPARATOR ', ') members,(SELECT GROUP_CONCAT(CONCAT(ri.room_number,' / Floor ',COALESCE(ri.floor_number,'')) ORDER BY ri.id SEPARATOR ', ') FROM registration_room_allocations rra JOIN room_inventory ri ON ri.id=rra.room_inventory_id WHERE rra.registration_id=r.id) assigned_rooms,(SELECT GROUP_CONCAT(CONCAT(bi.bus_name,' (',rba.seats_allocated,' seats)') SEPARATOR ', ') FROM registration_bus_allocations rba JOIN bus_instances bi ON bi.id=rba.bus_instance_id WHERE rba.registration_id=r.id) assigned_bus FROM registrations r JOIN tours t ON t.id=r.tour_id JOIN travel_options vo ON vo.id=r.travel_option_id JOIN room_types rt ON rt.id=r.room_type_id JOIN passengers p ON p.registration_id=r.id WHERE r.tour_id=? GROUP BY r.id ORDER BY vo.name,r.family_name`;
+const reportQuery = `SELECT r.id,r.family_name,r.contact_name,r.contact_phone,r.room_units,r.extra_beds,r.food_amount,r.travel_amount,r.accommodation_amount,r.total_amount,r.amount_received,r.admin_comments,r.status,t.name tour_name,t.location,vo.name travel_mode,vo.mode travel_mode_type,rt.name room_type,COUNT(p.id) member_count,GROUP_CONCAT(CONCAT(p.name,' (',p.gender,', ',p.age,')') ORDER BY p.id SEPARATOR ', ') members,(SELECT GROUP_CONCAT(CONCAT(ri.room_number,' / Floor ',COALESCE(ri.floor_number,''),' (',rra.standard_beds_allocated+rra.extra_beds_allocated,' bed(s))') ORDER BY ri.id SEPARATOR ', ') FROM registration_room_allocations rra JOIN room_inventory ri ON ri.id=rra.room_inventory_id WHERE rra.registration_id=r.id) assigned_rooms,(SELECT GROUP_CONCAT(CONCAT(bi.bus_name,' (',rba.seats_allocated,' seats)') SEPARATOR ', ') FROM registration_bus_allocations rba JOIN bus_instances bi ON bi.id=rba.bus_instance_id WHERE rba.registration_id=r.id) assigned_bus FROM registrations r JOIN tours t ON t.id=r.tour_id JOIN travel_options vo ON vo.id=r.travel_option_id JOIN room_types rt ON rt.id=r.room_type_id JOIN passengers p ON p.registration_id=r.id WHERE r.tour_id=? GROUP BY r.id ORDER BY vo.name,r.family_name`;
 async function getReport(tourId, type) {
   const [rows] = await pool.query(reportQuery, [tourId]);
   if (type === "bus") return rows.filter((x) => x.travel_mode_type === "BUS");
