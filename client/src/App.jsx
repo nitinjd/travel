@@ -444,6 +444,9 @@ function Registration({ tour }) {
                     {x.inventory?.available_units || 0} units available (
                     {x.inventory?.remaining_capacity || 0} people)
                   </small>
+                  {x.charge_type === "PER_BED" && (
+                    <small>Shared room • charged only for selected beds</small>
+                  )}
                 </button>
               ))}
             </div>
@@ -700,6 +703,16 @@ function Admin({ tour, token, refresh }) {
   const [t, setT] = useState({ ...tour }),
     [travels, setTravels] = useState(tour.travelOptions),
     [rooms, setRooms] = useState(tour.roomTypes),
+    [newRoom, setNewRoom] = useState({
+      name: "AC Sharable",
+      charge_type: "PER_BED",
+      charge_amount: 500,
+      capacity: 4,
+      is_ac: true,
+      extra_bed_allowed: false,
+      max_extra_beds: 0,
+      is_active: true,
+    }),
     [plan, setPlan] = useState(tour.itinerary),
     [message, setMessage] = useState(""),
     [messageType, setMessageType] = useState("success"),
@@ -762,6 +775,29 @@ function Admin({ tour, token, refresh }) {
   const childSaved = (value) => {
     setMessageType("success");
     setMessage(value);
+  };
+  const notify = (value, type = "success") => {
+    setMessageType(type);
+    setMessage(value);
+  };
+  const addRoomType = async () => {
+    const url = "/api/admin/room-types";
+    setSaving(url);
+    setMessage("");
+    try {
+      const created = await api(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ ...newRoom, tour_id: tour.id }),
+      });
+      setRooms((current) => [...current, { ...newRoom, id: created.id }]);
+      notify(`${newRoom.name} room type added. You can now add its inventory.`);
+      await refresh();
+    } catch (error) {
+      notify(`Could not add room type: ${error.message}`, "error");
+    } finally {
+      setSaving("");
+    }
   };
   return (
     <>
@@ -981,10 +1017,74 @@ function Admin({ tour, token, refresh }) {
               </button>
             </div>
           ))}
+          <div className="configCard roomConfig newRoomType">
+            <ConfigField label="New room type">
+              <input
+                value={newRoom.name}
+                onChange={(e) =>
+                  setNewRoom({ ...newRoom, name: e.target.value })
+                }
+              />
+            </ConfigField>
+            <ConfigField label="Charging basis">
+              <select
+                value={newRoom.charge_type}
+                onChange={(e) =>
+                  setNewRoom({ ...newRoom, charge_type: e.target.value })
+                }
+              >
+                <option value="PER_BED">Per bed (shared room)</option>
+                <option value="PER_ROOM">Per room</option>
+              </select>
+            </ConfigField>
+            <ConfigField label="Charge (₹)">
+              <input
+                type="number"
+                min="0"
+                value={newRoom.charge_amount}
+                onChange={(e) =>
+                  setNewRoom({
+                    ...newRoom,
+                    charge_amount: Number(e.target.value),
+                  })
+                }
+              />
+            </ConfigField>
+            <ConfigField label="Beds per room">
+              <input
+                type="number"
+                min="1"
+                value={newRoom.capacity}
+                onChange={(e) =>
+                  setNewRoom({
+                    ...newRoom,
+                    capacity: Number(e.target.value),
+                  })
+                }
+              />
+            </ConfigField>
+            <div className="configChecks">
+              <span>Facilities</span>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={newRoom.is_ac}
+                  onChange={(e) =>
+                    setNewRoom({ ...newRoom, is_ac: e.target.checked })
+                  }
+                />
+                Air-conditioned
+              </label>
+            </div>
+            <button disabled={!!saving} onClick={addRoomType}>
+              {saving === "/api/admin/room-types" ? "Adding…" : "Add room type"}
+            </button>
+          </div>
           <InventoryBuilder
             roomTypes={rooms}
             token={token}
-            onSaved={childSaved}
+            onSaved={notify}
+            onAdded={refresh}
           />
         </div>
         <div className="card wide editor">
@@ -1195,28 +1295,42 @@ function BusInventoryManager({ travelOptions, token, onSaved }) {
     </div>
   );
 }
-function InventoryBuilder({ roomTypes, token, onSaved }) {
+function InventoryBuilder({ roomTypes, token, onSaved, onAdded }) {
   const [roomTypeId, setRoomTypeId] = useState(roomTypes[0]?.id || "");
   const [quantity, setQuantity] = useState(1);
   const [prefix, setPrefix] = useState("ROOM");
   const [floor, setFloor] = useState("");
+  const [adding, setAdding] = useState(false);
+  const selectedRoom = roomTypes.find((x) => x.id === Number(roomTypeId));
   const add = async () => {
-    const room = roomTypes.find((x) => x.id === Number(roomTypeId));
-    const result = await api("/api/admin/room-inventory/bulk", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        room_type_id: Number(roomTypeId),
-        quantity,
-        prefix,
-        floor_number: floor,
-        standard_capacity: room.capacity,
-        extra_bed_capacity: room.max_extra_beds,
-      }),
-    });
-    onSaved(
-      `${result.created} inventory unit(s) added. Reload to see the updated availability.`,
-    );
+    if (!selectedRoom || quantity < 1 || !prefix.trim())
+      return onSaved(
+        "Select a room type and enter a valid quantity and room prefix.",
+        "error",
+      );
+    setAdding(true);
+    try {
+      const result = await api("/api/admin/room-inventory/bulk", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          room_type_id: Number(roomTypeId),
+          quantity,
+          prefix: prefix.trim(),
+          floor_number: floor,
+          standard_capacity: selectedRoom.capacity,
+          extra_bed_capacity: selectedRoom.max_extra_beds,
+        }),
+      });
+      onSaved(
+        `${result.created} ${selectedRoom.name} room(s) added with ${selectedRoom.capacity} bed(s) each.`,
+      );
+      await onAdded?.();
+    } catch (error) {
+      onSaved(`Could not add room inventory: ${error.message}`, "error");
+    } finally {
+      setAdding(false);
+    }
   };
   return (
     <div className="inventorySection">
@@ -1233,6 +1347,9 @@ function InventoryBuilder({ roomTypes, token, onSaved }) {
               </option>
             ))}
           </select>
+        </ConfigField>
+        <ConfigField label="Beds per room">
+          <input value={selectedRoom?.capacity || ""} disabled />
         </ConfigField>
         <ConfigField label="Units to add">
           <input
@@ -1256,8 +1373,16 @@ function InventoryBuilder({ roomTypes, token, onSaved }) {
             placeholder="e.g. 2"
           />
         </ConfigField>
-        <button onClick={add}>Add inventory</button>
+        <button disabled={adding} onClick={add}>
+          {adding ? "Adding…" : "Add inventory"}
+        </button>
       </div>
+      {selectedRoom?.charge_type === "PER_BED" && (
+        <small className="sharedHint">
+          Shared allocation is enabled: beds remain available until the room's
+          full capacity is allocated, including across different families.
+        </small>
+      )}
     </div>
   );
 }
