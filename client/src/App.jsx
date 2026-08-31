@@ -109,6 +109,66 @@ function Heading({ tag, title, text, action }) {
     </div>
   );
 }
+function TourImageCarousel({ itinerary }) {
+  const images = useMemo(
+    () =>
+      itinerary.flatMap((item) =>
+        (item.images || []).map((image) => ({ ...image, item })),
+      ),
+    [itinerary],
+  );
+  const [active, setActive] = useState(0);
+  useEffect(() => {
+    if (images.length < 2) return undefined;
+    const timer = window.setInterval(
+      () => setActive((current) => (current + 1) % images.length),
+      4500,
+    );
+    return () => window.clearInterval(timer);
+  }, [images.length]);
+  useEffect(() => setActive(0), [images.length]);
+  if (!images.length) return null;
+  const image = images[active];
+  return (
+    <section className="heroCarousel" aria-label="Tour highlights">
+      <img src={image.url} alt={image.item.title || image.file_name} />
+      <div className="heroCaption">
+        <b>{image.item.title}</b>
+        {image.item.location && <span>{image.item.location}</span>}
+      </div>
+      {images.length > 1 && (
+        <>
+          <button
+            className="heroPrevious"
+            aria-label="Previous image"
+            onClick={() =>
+              setActive((active - 1 + images.length) % images.length)
+            }
+          >
+            <ChevronLeft />
+          </button>
+          <button
+            className="heroNext"
+            aria-label="Next image"
+            onClick={() => setActive((active + 1) % images.length)}
+          >
+            <ChevronRight />
+          </button>
+          <div className="heroDots">
+            {images.map((x, index) => (
+              <button
+                key={x.id}
+                className={index === active ? "active" : ""}
+                aria-label={`Show image ${index + 1}`}
+                onClick={() => setActive(index)}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
 function Registration({ tour }) {
   const [step, setStep] = useState(1),
     [family, setFamily] = useState({
@@ -221,6 +281,7 @@ function Registration({ tour }) {
         }
       />
       {showPlan && <TourPlan tour={tour} onClose={() => setShowPlan(false)} />}
+      <TourImageCarousel itinerary={tour.itinerary} />
       <AvailabilityOverview tour={tour} />
       <div className="steps">
         {["Passengers", "Travel", "Stay", "Review"].map((x, i) => (
@@ -531,8 +592,32 @@ function TourPlan({ tour, onClose }) {
                     <time>{String(x.start_time || "").slice(0, 5)}</time>
                     <span>
                       <b>{x.title}</b>
-                      <small>{x.location}</small>
+                      {x.location &&
+                        (x.google_maps_url ? (
+                          <a
+                            className="planLocation"
+                            href={x.google_maps_url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <MapPin size={14} />
+                            {x.location} · Directions
+                          </a>
+                        ) : (
+                          <small>{x.location}</small>
+                        ))}
                       {x.notes && <small>{x.notes}</small>}
+                      {!!x.images?.length && (
+                        <div className="itineraryGallery">
+                          {x.images.map((image) => (
+                            <img
+                              key={image.id}
+                              src={image.url}
+                              alt={image.file_name || x.title}
+                            />
+                          ))}
+                        </div>
+                      )}
                     </span>
                   </div>
                 ))}
@@ -591,6 +676,37 @@ function Admin({ tour, token, refresh }) {
     await api(url, { method: "PUT", headers, body: JSON.stringify(data) });
     setMessage(`${label} saved`);
     refresh();
+  };
+  const uploadPlanImages = async (item, files) => {
+    if (!files.length) return;
+    if ((item.images?.length || 0) + files.length > 10) {
+      setMessage("A travel-plan item can contain a maximum of 10 images");
+      return;
+    }
+    const body = new FormData();
+    [...files].forEach((file) => body.append("images", file));
+    const response = await fetch(`/api/admin/itinerary/${item.id}/images`, {
+      method: "POST",
+      headers,
+      body,
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.message || "Image upload failed");
+    patchRow(setPlan, item.id, "images", [...(item.images || []), ...result]);
+    setMessage(`${result.length} image(s) uploaded for ${item.title}`);
+  };
+  const removePlanImage = async (item, imageId) => {
+    await api(`/api/admin/itinerary-images/${imageId}`, {
+      method: "DELETE",
+      headers,
+    });
+    patchRow(
+      setPlan,
+      item.id,
+      "images",
+      (item.images || []).filter((image) => image.id !== imageId),
+    );
+    setMessage(`Image removed from ${item.title}`);
   };
   return (
     <>
@@ -801,39 +917,73 @@ function Admin({ tour, token, refresh }) {
         <div className="card wide editor">
           <h2>Travel plan</h2>
           {plan.map((x) => (
-            <div className="editRow planEdit" key={x.id}>
-              <input
-                type="number"
-                value={x.day_number}
-                title="Day"
-                onChange={(e) =>
-                  patchRow(setPlan, x.id, "day_number", e.target.value)
-                }
-              />
-              <input
-                type="time"
-                value={String(x.start_time || "").slice(0, 5)}
-                onChange={(e) =>
-                  patchRow(setPlan, x.id, "start_time", e.target.value)
-                }
-              />
-              <input
-                value={x.title}
-                onChange={(e) =>
-                  patchRow(setPlan, x.id, "title", e.target.value)
-                }
-              />
-              <input
-                value={x.location || ""}
-                onChange={(e) =>
-                  patchRow(setPlan, x.id, "location", e.target.value)
-                }
-              />
-              <button
-                onClick={() => save(`/api/admin/itinerary/${x.id}`, x, x.title)}
-              >
-                Save
-              </button>
+            <div className="itineraryConfig" key={x.id}>
+              <div className="editRow planEdit">
+                <Field
+                  label="Day"
+                  type="number"
+                  value={x.day_number}
+                  onChange={(v) => patchRow(setPlan, x.id, "day_number", v)}
+                />
+                <Field
+                  label="Time"
+                  type="time"
+                  value={String(x.start_time || "").slice(0, 5)}
+                  onChange={(v) => patchRow(setPlan, x.id, "start_time", v)}
+                />
+                <Field
+                  label="Title"
+                  value={x.title}
+                  onChange={(v) => patchRow(setPlan, x.id, "title", v)}
+                />
+                <Field
+                  label="Location"
+                  value={x.location || ""}
+                  onChange={(v) => patchRow(setPlan, x.id, "location", v)}
+                />
+                <Field
+                  label="Google Maps / Directions link"
+                  value={x.google_maps_url || ""}
+                  onChange={(v) =>
+                    patchRow(setPlan, x.id, "google_maps_url", v)
+                  }
+                />
+                <button
+                  onClick={() =>
+                    save(`/api/admin/itinerary/${x.id}`, x, x.title)
+                  }
+                >
+                  Save
+                </button>
+              </div>
+              <div className="planImages">
+                <label className="imagePicker">
+                  Images ({x.images?.length || 0}/10)
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    multiple
+                    onChange={(e) =>
+                      uploadPlanImages(x, e.target.files).catch((error) =>
+                        setMessage(error.message),
+                      )
+                    }
+                  />
+                </label>
+                <div className="imageThumbs">
+                  {(x.images || []).map((image) => (
+                    <span key={image.id}>
+                      <img src={image.url} alt={image.file_name || x.title} />
+                      <button
+                        aria-label="Remove image"
+                        onClick={() => removePlanImage(x, image.id)}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
             </div>
           ))}
         </div>
