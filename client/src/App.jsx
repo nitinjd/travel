@@ -128,11 +128,20 @@ export default function App() {
   return (
     <>
       <header>
-        <div className="logo">TS</div>
-        <div>
-          <b>TourSetu</b>
-          <small>Trip Manager</small>
-        </div>
+        <button
+          type="button"
+          className="brandLink"
+          aria-label="Go to registration page"
+          onClick={() => {
+            window.location.href = "/";
+          }}
+        >
+          <span className="logo">TS</span>
+          <span className="brandText">
+            <b>TourSetu</b>
+            <small>Trip Manager</small>
+          </span>
+        </button>
         {displayTour && (
           <div className="trip">
             <CalendarDays size={16} />
@@ -149,39 +158,13 @@ export default function App() {
         }
       >
         {isAdminPage && token && (
-          <nav>
-            <button
-              className={tab === "tours" ? "active" : ""}
-              onClick={() => {
-                setEditingRegistrationId(null);
-                setTab("tours");
-              }}
-            >
-              <CalendarDays />
-              Tours
-            </button>
-            <button
-              className={tab === "admin" ? "active" : ""}
-              onClick={() => setTab(selectedAdminTour ? "admin" : "tours")}
-            >
-              <Settings2 />
-              Trip Setup
-            </button>
-            <button
-              className={tab === "reports" ? "active" : ""}
-              onClick={() => {
-                setEditingRegistrationId(null);
-                setTab(adminTour ? "reports" : "tours");
-              }}
-            >
-              <Download />
-              Reports
-            </button>
-            <button className="logoutButton" onClick={logout}>
-              <LogOut />
+          <div className="headerActions">
+            <div className="admin">Administrator</div>
+            <button type="button" className="headerLogout" onClick={logout}>
+              <LogOut size={16} />
               Logout
             </button>
-          </nav>
+          </div>
         )}
         <section className="content">
           {error && (
@@ -209,6 +192,7 @@ export default function App() {
               token={token}
               selectedTourId={selectedAdminTour?.id}
               onSelect={(id) => loadAdminTour(id).then(() => setTab("admin"))}
+              onReports={(id) => loadAdminTour(id).then(() => setTab("reports"))}
             />
           ) : tab === "admin" ? (
             adminTour ? (
@@ -218,7 +202,7 @@ export default function App() {
                 refresh={() => loadAdminTour(adminTour.id)}
               />
             ) : (
-              <TourList token={token} onSelect={loadAdminTour} />
+              <TourList token={token} onSelect={(id) => loadAdminTour(id).then(() => setTab("admin"))} onReports={(id) => loadAdminTour(id).then(() => setTab("reports"))} />
             )
           ) : tab === "registration" && editingRegistrationId ? (
             <Registration
@@ -565,6 +549,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                 ? submitted.updated_at || submitted.created_at
                 : submitted.created_at,
             )}
+            className="summarySaved"
           />
         </div>
 
@@ -1219,7 +1204,7 @@ function Login({ onLogin }) {
     </div>
   );
 }
-function TourList({ token, selectedTourId, onSelect }) {
+function TourList({ token, selectedTourId, onSelect, onReports }) {
   const [tours, setTours] = useState([]),
     [loading, setLoading] = useState(true),
     [opening, setOpening] = useState(null),
@@ -1238,6 +1223,17 @@ function TourList({ token, selectedTourId, onSelect }) {
     setError("");
     try {
       await onSelect(id);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setOpening(null);
+    }
+  };
+  const openReports = async (id) => {
+    setOpening(id);
+    setError("");
+    try {
+      await onReports?.(id);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -1294,6 +1290,15 @@ function TourList({ token, selectedTourId, onSelect }) {
                       onClick={() => open(item.id)}
                     >
                       {opening === item.id ? "Opening…" : "Open setup"}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary reportTourButton"
+                      disabled={opening !== null}
+                      onClick={() => openReports(item.id)}
+                    >
+                      <Download size={15} />
+                      Reports
                     </button>
                   </td>
                 </tr>
@@ -2212,7 +2217,8 @@ function BusInventoryManager({ travelOptions, token, onSaved }) {
   );
 }
 function RoomInventoryInline({ room, token, onSaved, onAdded }) {
-  const [quantity, setQuantity] = useState(1);
+  const currentUnits = Number(room.inventory?.total_units || 0);
+  const [targetQuantity, setTargetQuantity] = useState(currentUnits);
   const [prefix, setPrefix] = useState(
     String(room.name || "ROOM")
       .replace(/[^a-zA-Z0-9]/g, "")
@@ -2220,51 +2226,67 @@ function RoomInventoryInline({ room, token, onSaved, onAdded }) {
       .toUpperCase() || "ROOM",
   );
   const [floor, setFloor] = useState("");
-  const [adding, setAdding] = useState(false);
-  const add = async () => {
-    if (quantity < 1 || !prefix.trim())
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setTargetQuantity(Number(room.inventory?.total_units || 0));
+  }, [room.inventory?.total_units]);
+
+  const save = async () => {
+    const quantity = Number(targetQuantity);
+    if (!Number.isInteger(quantity) || quantity < 0 || quantity > 200)
       return onSaved(
-        `Enter a valid quantity and room prefix for ${room.name}.`,
+        `Enter a total inventory quantity between 0 and 200 for ${room.name}.`,
         "error",
       );
-    setAdding(true);
+
+    if (quantity === 0 && currentUnits > 0) {
+      const confirmed = window.confirm(
+        `Remove all unused ${room.name} inventory? Allocated units will be kept and the remaining unused units will be removed.`,
+      );
+      if (!confirmed) return;
+    }
+
+    if (quantity > currentUnits && !prefix.trim())
+      return onSaved(`Enter a room prefix for ${room.name}.`, "error");
+
+    setSaving(true);
     try {
       const result = await api("/api/admin/room-inventory/bulk", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           room_type_id: room.id,
-          quantity,
+          target_quantity: quantity,
           prefix: prefix.trim(),
           floor_number: floor,
           standard_capacity: room.capacity,
           extra_bed_capacity: room.max_extra_beds,
         }),
       });
-      onSaved(
-        `${result.created} ${room.name} room(s) added with ${room.capacity} bed(s) each.`,
-      );
+      onSaved(result.message);
       await onAdded?.();
     } catch (error) {
-      onSaved(
-        `Could not add ${room.name} inventory: ${error.message}`,
-        "error",
-      );
+      onSaved(`Could not update ${room.name} inventory: ${error.message}`, "error");
+      setTargetQuantity(currentUnits);
     } finally {
-      setAdding(false);
+      setSaving(false);
     }
   };
+
+  const delta = Number(targetQuantity) - currentUnits;
+
   return (
     <div className="roomInventoryInline">
       <h3>Inventory for {room.name}</h3>
       <div
-        className={`inventoryStatus ${Number(room.inventory?.total_units || 0) === 0 ? "empty" : ""}`}
+        className={`inventoryStatus ${currentUnits === 0 ? "empty" : ""}`}
       >
         <span>
-          Current: {room.inventory?.total_units || 0} room(s)/unit(s) •{" "}
+          Current: {currentUnits} room(s)/unit(s) •{" "}
           {room.inventory?.remaining_capacity || 0} bed(s) remaining
         </span>
-        {Number(room.inventory?.total_units || 0) === 0 && (
+        {currentUnits === 0 && (
           <small>
             Registration cannot use this room type until inventory is added.
           </small>
@@ -2274,32 +2296,41 @@ function RoomInventoryInline({ room, token, onSaved, onAdded }) {
         <ConfigField label="Beds per room">
           <input value={room.capacity || ""} disabled />
         </ConfigField>
-        <ConfigField label="Units to add">
+        <ConfigField label="Total units">
           <input
             type="number"
-            min="1"
-            value={quantity}
-            onChange={(e) => setQuantity(Number(e.target.value))}
+            min="0"
+            max="200"
+            value={targetQuantity}
+            onChange={(e) => setTargetQuantity(Number(e.target.value))}
           />
         </ConfigField>
-        <ConfigField label="Room prefix">
-          <input
-            value={prefix}
-            onChange={(e) => setPrefix(e.target.value)}
-            placeholder="e.g. AC"
-          />
-        </ConfigField>
-        <ConfigField label="Floor">
-          <input
-            value={floor}
-            onChange={(e) => setFloor(e.target.value)}
-            placeholder="e.g. 2"
-          />
-        </ConfigField>
-        <button disabled={adding} onClick={add}>
-          {adding ? "Adding…" : "Add inventory"}
+        {delta > 0 && (
+          <>
+            <ConfigField label="Room prefix">
+              <input
+                value={prefix}
+                onChange={(e) => setPrefix(e.target.value)}
+                placeholder="e.g. AC"
+              />
+            </ConfigField>
+            <ConfigField label="Floor">
+              <input
+                value={floor}
+                onChange={(e) => setFloor(e.target.value)}
+                placeholder="e.g. 2"
+              />
+            </ConfigField>
+          </>
+        )}
+        <button disabled={saving} onClick={save}>
+          {saving ? "Updating…" : delta > 0 ? "Add inventory" : delta < 0 ? "Reduce inventory" : "Save inventory"}
         </button>
       </div>
+      <small className="sharedHint">
+        Set the final number of units. When reducing, the system removes only
+        unused units; allocated rooms/beds are never deleted.
+      </small>
       {room.charge_type === "PER_BED" && (
         <small className="sharedHint">
           Shared allocation remains available until all beds in these rooms are
@@ -2569,8 +2600,8 @@ function Reports({ tour, token, onEditRegistration }) {
           Clear filters
         </button>
       </div>
-      <div className="card table">
-        <table>
+      <div className="card table reportTableWrap">
+        <table className="reportTable">
           <thead>
             <tr>
               {[
@@ -2711,7 +2742,7 @@ function Counter({ label, value, set }) {
     </div>
   );
 }
-function Summary({ label, value }) {
+function Summary({ label, value, className = "" }) {
   return (
     <div>
       <small>{label}</small>

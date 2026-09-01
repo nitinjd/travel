@@ -86,14 +86,18 @@
   margin-bottom: 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: #f8f9fc;
+  background: #eef1f6;
   min-width: 0;
 }
 .travelConfig {
   grid-template-columns: 1.5fr 0.8fr 1fr 0.8fr auto auto;
+  background: #eef1f6;
+  border-color: #cbd3e1;
 }
 .roomConfig {
   grid-template-columns: 1.35fr 1fr 0.75fr 0.8fr 1.15fr auto;
+  background: #e9edf4;
+  border-color: #cbd3e1;
 }
 .roomDescription {
   grid-column: 1 / -1;
@@ -793,4 +797,65 @@ button.danger {
   .planDays {
     grid-template-columns: 1fr;
   }
+}
+
+
+/* Clear row separation and report fit */
+.roomInventoryInline {
+  background: #f1f4f8;
+  border: 1px solid #cbd3e1;
+  border-radius: 10px;
+  padding: 14px;
+}
+.configCard + .configCard {
+  border-top: 1px solid #c1cad8;
+}
+.reportTourButton {
+  margin-left: 6px;
+}
+.tourList table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+.tourList th,
+.tourList td {
+  overflow-wrap: anywhere;
+}
+.card.table {
+  overflow-x: hidden;
+}
+.card.table table {
+  width: 100%;
+}
+.reportTableWrap {
+  overflow-x: hidden;
+}
+.reportTable {
+  width: 100%;
+  table-layout: fixed;
+  font-size: 12px;
+}
+.reportTable th,
+.reportTable td {
+  padding: 9px 7px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.reportTable th {
+  font-size: 10px;
+}
+.reportTable .commentCell {
+  min-width: 0;
+}
+.summarySaved {
+  align-self: start;
+  background: #eef1f6;
+  border: 1px solid #d2d8e3;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.inlineInventoryBuilder {
+  grid-template-columns: 0.7fr 0.9fr 1.1fr 0.8fr auto;
 }

@@ -537,57 +537,122 @@ app.post(
   requireAdmin,
   asyncRoute(async (req, res) => {
     const x = req.body;
-    const quantity = Math.max(1, Math.min(200, Number(x.quantity || 1)));
-    const prefix = String(x.prefix || "ROOM")
-      .trim()
-      .replace(/[^a-zA-Z0-9_-]/g, "-")
-      .slice(0, 35);
-    const created = await transaction(async (c) => {
+    const roomTypeId = Number(x.room_type_id);
+    const targetQuantity = Number(x.target_quantity);
+    if (!Number.isInteger(roomTypeId) || roomTypeId <= 0)
+      throw Object.assign(new Error("Invalid room type"), { status: 400 });
+    if (!Number.isInteger(targetQuantity) || targetQuantity < 0 || targetQuantity > 200)
+      throw Object.assign(new Error("Total inventory must be between 0 and 200"), { status: 400 });
+
+    const result = await transaction(async (c) => {
       const [[type]] = await c.query(
         "SELECT * FROM room_types WHERE id=? FOR UPDATE",
-        [x.room_type_id],
+        [roomTypeId],
       );
       if (!type)
         throw Object.assign(new Error("Room type not found"), { status: 404 });
-      const capacity = Number(x.standard_capacity || type.capacity);
-      if (!Number.isInteger(capacity) || capacity < 1 || capacity > 100)
-        throw Object.assign(
-          new Error("Beds per room must be between 1 and 100"),
-          { status: 400 },
-        );
-      const [[{ count }]] = await c.query(
-        "SELECT COUNT(*) count FROM room_inventory WHERE room_type_id=?",
-        [x.room_type_id],
+
+      const [[{ active_count }]] = await c.query(
+        "SELECT COUNT(*) active_count FROM room_inventory WHERE room_type_id=? AND is_active=1",
+        [roomTypeId],
       );
-      const ids = [];
-      let nextNumber = Number(count) + 1;
-      for (let i = 1; i <= quantity; i++) {
-        let roomNumber;
-        while (true) {
-          roomNumber = `${prefix || "ROOM"}-${String(nextNumber).padStart(2, "0")}`;
-          const [[existing]] = await c.query(
-            "SELECT id FROM room_inventory WHERE room_type_id=? AND room_number=?",
-            [x.room_type_id, roomNumber],
-          );
-          nextNumber++;
-          if (!existing) break;
-        }
-        const [r] = await c.query(
-          "INSERT INTO room_inventory(room_type_id,room_number,floor_number,standard_capacity,extra_bed_capacity,notes) VALUES(?,?,?,?,?,?)",
-          [
-            x.room_type_id,
-            roomNumber,
-            x.floor_number || null,
-            capacity,
-            x.extra_bed_capacity ?? type.max_extra_beds,
-            x.notes || null,
-          ],
-        );
-        ids.push(r.insertId);
+      const current = Number(active_count || 0);
+
+      if (targetQuantity === current) {
+        return { created: 0, deactivated: 0, current, message: `Inventory already has ${current} active unit(s).` };
       }
-      return ids;
+
+      if (targetQuantity > current) {
+        const quantity = targetQuantity - current;
+        const prefix = String(x.prefix || "ROOM")
+          .trim()
+          .replace(/[^a-zA-Z0-9_-]/g, "-")
+          .slice(0, 35) || "ROOM";
+        const floor = x.floor_number || null;
+        const capacity = Number(x.standard_capacity || type.capacity);
+        if (!Number.isInteger(capacity) || capacity < 1 || capacity > 100)
+          throw Object.assign(
+            new Error("Beds per room must be between 1 and 100"),
+            { status: 400 },
+          );
+
+        const [[{ count }]] = await c.query(
+          "SELECT COUNT(*) count FROM room_inventory WHERE room_type_id=?",
+          [roomTypeId],
+        );
+        let nextNumber = Number(count) + 1;
+        let created = 0;
+        for (let i = 0; i < quantity; i++) {
+          let roomNumber;
+          while (true) {
+            roomNumber = `${prefix}-${String(nextNumber).padStart(2, "0")}`;
+            nextNumber++;
+            const [[existing]] = await c.query(
+              "SELECT id FROM room_inventory WHERE room_type_id=? AND room_number=?",
+              [roomTypeId, roomNumber],
+            );
+            if (!existing) break;
+          }
+          await c.query(
+            "INSERT INTO room_inventory(room_type_id,room_number,floor_number,standard_capacity,extra_bed_capacity,notes,is_active) VALUES(?,?,?,?,?,?,1)",
+            [
+              roomTypeId,
+              roomNumber,
+              floor,
+              capacity,
+              x.extra_bed_capacity ?? type.max_extra_beds,
+              x.notes || null,
+            ],
+          );
+          created++;
+        }
+        return {
+          created,
+          deactivated: 0,
+          current: targetQuantity,
+          message: `${created} ${type.name} room(s)/unit(s) added. Total active inventory: ${targetQuantity}.`,
+        };
+      }
+
+      const reduceBy = current - targetQuantity;
+      const [candidates] = await c.query(
+        `SELECT ri.id
+         FROM room_inventory ri
+         WHERE ri.room_type_id=? AND ri.is_active=1
+           AND NOT EXISTS (
+             SELECT 1
+             FROM registration_room_allocations rra
+             JOIN registrations r ON r.id=rra.registration_id
+             WHERE rra.room_inventory_id=ri.id
+               AND r.status<>'CANCELLED'
+           )
+         ORDER BY ri.id DESC
+         LIMIT ? FOR UPDATE`,
+        [roomTypeId, reduceBy],
+      );
+      if (candidates.length < reduceBy) {
+        const removable = candidates.length;
+        throw Object.assign(
+          new Error(
+            `Cannot reduce ${type.name} inventory to ${targetQuantity}. ${removable} unused unit(s) can be removed, but ${reduceBy} are required. Allocated rooms/beds are protected.`,
+          ),
+          { status: 409 },
+        );
+      }
+      const ids = candidates.map((row) => row.id);
+      await c.query(
+        `UPDATE room_inventory SET is_active=0 WHERE id IN (${ids.map(() => "?").join(",")})`,
+        ids,
+      );
+      return {
+        created: 0,
+        deactivated: ids.length,
+        current: targetQuantity,
+        message: `${ids.length} unused ${type.name} room(s)/unit(s) removed. Total active inventory: ${targetQuantity}.`,
+      };
     });
-    res.status(201).json({ created: created.length, ids: created });
+
+    res.json(result);
   }),
 );
 app.put(

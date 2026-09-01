@@ -51,6 +51,45 @@ header > div:nth-child(2) {
 header small {
   opacity: 0.7;
 }
+
+.brandLink {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+.brandText {
+  display: flex;
+  flex-direction: column;
+}
+.headerActions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.headerLogout {
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #ffffff33;
+  border-radius: 9px;
+  padding: 0 12px;
+  color: white;
+  background: #ffffff12;
+  cursor: pointer;
+}
+.headerLogout:hover {
+  background: #ffffff20;
+}
+
 .trip {
   margin: auto;
   display: flex;
@@ -71,7 +110,7 @@ header small {
 }
 main {
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: minmax(0, 1fr);
   min-height: calc(100vh - 74px);
 }
 .loginMain {
@@ -920,5 +959,26 @@ td small {
   * {
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
+  }
+}
+
+
+/* Admin UX refinements */
+.brandLink:focus-visible,
+.headerLogout:focus-visible,
+.setupSubmenu button:focus-visible,
+button:focus-visible {
+  outline: 3px solid #93c5fd;
+  outline-offset: 2px;
+}
+@media (max-width: 700px) {
+  header {
+    padding: 0 16px;
+  }
+  .trip {
+    display: none;
+  }
+  .headerActions .admin {
+    display: none;
   }
 }
