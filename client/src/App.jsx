@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  ArrowLeft,
   Bus,
   CalendarDays,
   ChevronLeft,
@@ -143,29 +144,26 @@ export default function App() {
           </span>
         </button>
         {displayTour && (
-          <div className="trip">
-            <CalendarDays size={16} />
-            {displayTour.start_date} – {displayTour.end_date}
-            <MapPin size={16} />
-            {displayTour.location}
+          <div className="trip" aria-label="Current tour">
+            <span><CalendarDays size={15} /> {displayTour.start_date} – {displayTour.end_date}</span>
+            <span><MapPin size={15} /> {displayTour.location}</span>
           </div>
         )}
-        {isAdminPage && token && <div className="admin">Administrator</div>}
-      </header>
-      <main
-        className={
-          !isAdminPage ? "publicMain" : !token ? "loginMain" : "adminMain"
-        }
-      >
-        {isAdminPage && token && (
-          <div className="headerActions">
+        {isAdminPage && token ? (
+          <div className="headerTools">
             <div className="admin">Administrator</div>
             <button type="button" className="headerLogout" onClick={logout}>
               <LogOut size={16} />
               Logout
             </button>
           </div>
-        )}
+        ) : null}
+      </header>
+      <main
+        className={
+          !isAdminPage ? "publicMain" : !token ? "loginMain" : "adminMain"
+        }
+      >
         <section className="content">
           {error && (
             <div className="alert appError">
@@ -200,6 +198,7 @@ export default function App() {
                 tour={adminTour}
                 token={token}
                 refresh={() => loadAdminTour(adminTour.id)}
+                onBack={() => setTab("tours")}
               />
             ) : (
               <TourList token={token} onSelect={(id) => loadAdminTour(id).then(() => setTab("admin"))} onReports={(id) => loadAdminTour(id).then(() => setTab("reports"))} />
@@ -224,6 +223,7 @@ export default function App() {
                 setEditingRegistrationId(id);
                 setTab("registration");
               }}
+              onBack={() => setTab("tours")}
             />
           )}
         </section>
@@ -1283,23 +1283,25 @@ function TourList({ token, selectedTourId, onSelect, onReports }) {
                     </span>
                   </td>
                   <td>
-                    <button
-                      type="button"
-                      className="primary"
-                      disabled={opening !== null}
-                      onClick={() => open(item.id)}
-                    >
-                      {opening === item.id ? "Opening…" : "Open setup"}
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary reportTourButton"
-                      disabled={opening !== null}
-                      onClick={() => openReports(item.id)}
-                    >
-                      <Download size={15} />
-                      Reports
-                    </button>
+                    <div className="tourActions">
+                      <button
+                        type="button"
+                        className="primary"
+                        disabled={opening !== null}
+                        onClick={() => open(item.id)}
+                      >
+                        {opening === item.id ? "Opening…" : "Open setup"}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary reportTourButton"
+                        disabled={opening !== null}
+                        onClick={() => openReports(item.id)}
+                      >
+                        <Download size={15} />
+                        Reports
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1310,7 +1312,7 @@ function TourList({ token, selectedTourId, onSelect, onReports }) {
     </>
   );
 }
-function Admin({ tour, token, refresh }) {
+function Admin({ tour, token, refresh, onBack }) {
   const [setupSection, setSetupSection] = useState("tour"),
     [t, setT] = useState({ ...tour }),
     [travels, setTravels] = useState(tour.travelOptions),
@@ -1489,17 +1491,23 @@ function Admin({ tour, token, refresh }) {
         title="Trip master setup"
         text="Configure tour, travel, accommodation and day-wise itinerary."
         action={
-          setupSection === "tour" ? (
-            <button
-              className="primary"
-              disabled={!!saving}
-              onClick={() => save(`/api/admin/tours/${tour.id}`, t, "Tour")}
-            >
-              {saving === `/api/admin/tours/${tour.id}`
-                ? "Saving tour…"
-                : "Save tour"}
+          <div className="headingActions">
+            <button type="button" className="secondary backButton" onClick={onBack}>
+              <ArrowLeft size={16} />
+              Tour list
             </button>
-          ) : null
+            {setupSection === "tour" && (
+              <button
+                className="primary"
+                disabled={!!saving}
+                onClick={() => save(`/api/admin/tours/${tour.id}`, t, "Tour")}
+              >
+                {saving === `/api/admin/tours/${tour.id}`
+                  ? "Saving tour…"
+                  : "Save tour"}
+              </button>
+            )}
+          </div>
         }
       />
       <div className="setupSubmenu" role="tablist" aria-label="Trip setup">
@@ -2340,7 +2348,7 @@ function RoomInventoryInline({ room, token, onSaved, onAdded }) {
     </div>
   );
 }
-function Reports({ tour, token, onEditRegistration }) {
+function Reports({ tour, token, onEditRegistration, onBack }) {
   const [type, setType] = useState("overall"),
     [busFilter, setBusFilter] = useState(""),
     [roomFilter, setRoomFilter] = useState(""),
@@ -2433,10 +2441,16 @@ function Reports({ tour, token, onEditRegistration }) {
         title="Trip reports"
         text="View on screen or download a true Excel workbook."
         action={
-          <button className="primary" onClick={download}>
-            <Download />
-            Download Excel
-          </button>
+          <div className="headingActions">
+            <button type="button" className="secondary backButton" onClick={onBack}>
+              <ArrowLeft size={16} />
+              Tour list
+            </button>
+            <button className="primary" onClick={download}>
+              <Download size={16} />
+              Download Excel
+            </button>
+          </div>
         }
       />
       {error && <div className="alert">{error}</div>}
