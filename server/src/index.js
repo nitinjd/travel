@@ -961,13 +961,19 @@ app.patch(
         .trim()
         .slice(0, 1000) || null;
     await pool.query(
-      "UPDATE registrations SET amount_received=?,admin_comments=? WHERE id=?",
-      [req.body.amount_received ? 1 : 0, comments, req.params.id],
+      "UPDATE registrations SET amount_received=?,admin_comments=?,status=CASE WHEN ?=1 THEN 'CONFIRMED' ELSE 'SUBMITTED' END WHERE id=?",
+      [
+        req.body.amount_received ? 1 : 0,
+        comments,
+        req.body.amount_received ? 1 : 0,
+        req.params.id,
+      ],
     );
     res.json({
       success: true,
       amount_received: req.body.amount_received ? 1 : 0,
       admin_comments: comments,
+      status: req.body.amount_received ? "CONFIRMED" : "SUBMITTED",
     });
   }),
 );
