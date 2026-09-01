@@ -425,8 +425,11 @@ footer {
 }
 .summary {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 10px;
+}
+.familyMandalFields label:last-child {
+  margin-bottom: 0;
 }
 .summary div {
   background: #f5f7fb;
