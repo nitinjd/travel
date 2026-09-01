@@ -150,11 +150,11 @@ export default function App() {
           </span>
         </button>
         {displayTour && (
-          <div className="trip">
-            <CalendarDays size={16} />
-            {displayTour.start_date} – {displayTour.end_date}
-            <MapPin size={16} />
-            {displayTour.location}
+          <div className="trip" aria-label={`Current tour: ${displayTour.name || displayTour.location || "Tour"}`}>
+            <CalendarDays size={16} aria-hidden="true" />
+            <span>{displayTour.start_date} – {displayTour.end_date}</span>
+            <MapPin size={16} aria-hidden="true" />
+            <span>{displayTour.location || "Location not set"}</span>
           </div>
         )}
         <div className="headerActions">
