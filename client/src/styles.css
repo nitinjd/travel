@@ -870,3 +870,52 @@ td small {
     padding: 17px;
   }
 }
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+  body {
+    background: white;
+  }
+  header,
+  nav,
+  .noPrint {
+    display: none !important;
+  }
+  main,
+  .adminMain,
+  .publicMain {
+    display: block;
+    min-height: auto;
+  }
+  .content {
+    width: 100%;
+    max-width: none;
+    padding: 0;
+  }
+  .confirmation {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+  }
+  .confirmationSummary > div,
+  .confirmationSection,
+  .confirmationColumns > div,
+  .confirmationBill,
+  .confirmationPayee,
+  .bookingConditions,
+  tr {
+    break-inside: avoid;
+  }
+  .confirmationPassengers {
+    overflow: visible;
+  }
+  * {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}
