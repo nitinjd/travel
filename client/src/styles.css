@@ -549,6 +549,74 @@ footer {
 .success .primary {
   margin-top: 16px;
 }
+.confirmation {
+  max-width: 900px;
+  margin: 24px auto;
+  text-align: left;
+}
+.confirmationHeading {
+  text-align: center;
+}
+.confirmationSummary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 22px;
+}
+.confirmationSummary > div {
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  border-radius: 9px;
+  background: #f5f7fb;
+}
+.confirmationSummary small {
+  color: var(--muted);
+}
+.confirmationSection {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.confirmationSection h3 {
+  margin: 0 0 9px;
+  font-size: 15px;
+}
+.confirmationSection p {
+  margin: 5px 0;
+  color: var(--muted);
+}
+.confirmationPassengers {
+  padding: 0;
+}
+.confirmationPassengers h3 {
+  padding: 14px 14px 5px;
+}
+.confirmationColumns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.confirmationBill {
+  margin-top: 14px;
+}
+.confirmationPayee {
+  margin-top: 12px;
+  padding: 13px;
+  border-radius: 9px;
+  background: #eef3ff;
+}
+.confirmationActions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 18px;
+}
+.confirmationActions .primary,
+.confirmationActions .secondary {
+  margin-top: 0;
+}
 .reportEditLink {
   display: block;
   border: 0;
@@ -790,6 +858,13 @@ td small {
   }
   .summary {
     grid-template-columns: 1fr 1fr;
+  }
+  .confirmationSummary,
+  .confirmationColumns {
+    grid-template-columns: 1fr;
+  }
+  .confirmationActions {
+    flex-direction: column;
   }
   .card {
     padding: 17px;
