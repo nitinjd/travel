@@ -52,6 +52,7 @@ export default function App() {
   const isAdminPage = window.location.pathname.startsWith("/admin");
   const [tour, setTour] = useState(null),
     [tab, setTab] = useState("admin"),
+    [editingRegistrationId, setEditingRegistrationId] = useState(null),
     [token, setToken] = useState(localStorage.getItem("tourToken")),
     [error, setError] = useState("");
   useEffect(() => {
@@ -98,7 +99,10 @@ export default function App() {
             </button>
             <button
               className={tab === "reports" ? "active" : ""}
-              onClick={() => setTab("reports")}
+              onClick={() => {
+                setEditingRegistrationId(null);
+                setTab("reports");
+              }}
             >
               <Download />
               Reports
@@ -133,8 +137,29 @@ export default function App() {
               token={token}
               refresh={() => api("/api/tours/active").then(setTour)}
             />
+          ) : tab === "registration" && editingRegistrationId ? (
+            <Registration
+              tour={tour}
+              token={token}
+              adminEditId={editingRegistrationId}
+              onAdminDone={() => {
+                api("/api/tours/active")
+                  .then(setTour)
+                  .finally(() => {
+                    setEditingRegistrationId(null);
+                    setTab("reports");
+                  });
+              }}
+            />
           ) : (
-            <Reports tour={tour} token={token} />
+            <Reports
+              tour={tour}
+              token={token}
+              onEditRegistration={(id) => {
+                setEditingRegistrationId(id);
+                setTab("registration");
+              }}
+            />
           )}
         </section>
       </main>
@@ -252,7 +277,7 @@ function BookingConditions({ compact = false }) {
     </div>
   );
 }
-function Registration({ tour }) {
+function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
   const [step, setStep] = useState(1),
     [family, setFamily] = useState({
       family_name: "",
@@ -268,10 +293,42 @@ function Registration({ tour }) {
     [submitted, setSubmitted] = useState(null),
     [showPlan, setShowPlan] = useState(false),
     [busy, setBusy] = useState(false),
+    [loadingEdit, setLoadingEdit] = useState(!!adminEditId),
+    [editRecord, setEditRecord] = useState(null),
     [paymentReceiver, setPaymentReceiver] = useState(PAYMENT_RECEIVERS[0]),
     [termsAccepted, setTermsAccepted] = useState(false),
     [stepNotice, setStepNotice] = useState(""),
     [error, setError] = useState("");
+  useEffect(() => {
+    if (!adminEditId) return;
+    setLoadingEdit(true);
+    api(`/api/admin/registrations/${adminEditId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((record) => {
+        setEditRecord(record);
+        setFamily({
+          family_name: record.family_name || "",
+          contact_name: record.contact_name || "",
+          contact_phone: record.contact_phone || "",
+          contact_email: record.contact_email || "",
+        });
+        setPeople(
+          record.passengers.map((passenger) => ({
+            ...passenger,
+            age: String(passenger.age),
+            requires_seat_bed: !!passenger.requires_seat_bed,
+          })),
+        );
+        setTravel(record.travel_option_id);
+        setRoom(record.room_type_id);
+        setPaymentReceiver(record.payment_receiver || PAYMENT_RECEIVERS[0]);
+        setTermsAccepted(!!record.terms_accepted);
+        setError("");
+      })
+      .catch((requestError) => setError(requestError.message))
+      .finally(() => setLoadingEdit(false));
+  }, [adminEditId, token]);
   const travelItem = tour.travelOptions.find((x) => x.id === Number(travel)),
     roomItem = tour.roomTypes.find((x) => x.id === Number(room));
   const allocationCount = useMemo(
@@ -282,15 +339,18 @@ function Registration({ tour }) {
       ).length,
     [people],
   );
+  const availableRoomCapacity = (item) =>
+    Number(item?.inventory?.remaining_capacity || 0) +
+    (editRecord && Number(editRecord.room_type_id) === Number(item?.id)
+      ? Number(editRecord.allocation_count || 0)
+      : 0);
   useEffect(() => {
-    if (Number(roomItem?.inventory?.remaining_capacity || 0) >= allocationCount)
-      return;
+    if (availableRoomCapacity(roomItem) >= allocationCount) return;
     const available = tour.roomTypes.find(
-      (item) =>
-        Number(item.inventory?.remaining_capacity || 0) >= allocationCount,
+      (item) => availableRoomCapacity(item) >= allocationCount,
     );
     if (available) setRoom(available.id);
-  }, [allocationCount, room, roomItem, tour.roomTypes]);
+  }, [allocationCount, editRecord, room, roomItem, tour.roomTypes]);
   const { units, extra } = useMemo(
     () => calculateAccommodation(roomItem, allocationCount),
     [roomItem, allocationCount],
@@ -340,10 +400,7 @@ function Registration({ tour }) {
       )
         return setError("Enter a valid name and age for every passenger");
     }
-    if (
-      step === 3 &&
-      Number(roomItem?.inventory?.remaining_capacity || 0) < allocationCount
-    )
+    if (step === 3 && availableRoomCapacity(roomItem) < allocationCount)
       return setError(
         `${roomItem?.name || "Selected accommodation"} has no capacity for ${allocationCount} booked bed(s). Please select another option or ask the administrator to add room inventory.`,
       );
@@ -359,20 +416,28 @@ function Registration({ tour }) {
     setBusy(true);
     setError("");
     try {
-      const result = await api("/api/registrations", {
-        method: "POST",
-        body: JSON.stringify({
-          ...family,
-          tour_id: tour.id,
-          passengers: people,
-          travel_option_id: Number(travel),
-          room_type_id: Number(room),
-          room_units: units,
-          extra_beds: extra,
-          payment_receiver: paymentReceiver,
-          terms_accepted: termsAccepted,
-        }),
-      });
+      const result = await api(
+        adminEditId
+          ? `/api/admin/registrations/${adminEditId}`
+          : "/api/registrations",
+        {
+          method: adminEditId ? "PUT" : "POST",
+          headers: adminEditId
+            ? { Authorization: `Bearer ${token}` }
+            : undefined,
+          body: JSON.stringify({
+            ...family,
+            tour_id: tour.id,
+            passengers: people,
+            travel_option_id: Number(travel),
+            room_type_id: Number(room),
+            room_units: units,
+            extra_beds: extra,
+            payment_receiver: paymentReceiver,
+            terms_accepted: termsAccepted,
+          }),
+        },
+      );
       setSubmitted(result);
     } catch (e) {
       setError(e.message);
@@ -380,13 +445,21 @@ function Registration({ tour }) {
       setBusy(false);
     }
   };
+  if (loadingEdit)
+    return <div className="card">Loading family registration…</div>;
   if (submitted)
     return (
       <div className="card success">
         <i>✓</i>
-        <h2>Registration submitted</h2>
+        <h2>
+          {adminEditId ? "Registration updated" : "Registration submitted"}
+        </h2>
         <p>
-          <b>Booking pending payment confirmation.</b>
+          <b>
+            {adminEditId
+              ? "All changes and inventory allocations were saved."
+              : "Booking pending payment confirmation."}
+          </b>
         </p>
         <p>
           Family total: <b>{money(submitted.total_amount)}</b>
@@ -396,19 +469,39 @@ function Registration({ tour }) {
           Rooms: <b>{submitted.assigned_rooms?.join(", ")}</b>
         </p>
         <small>Registration #{submitted.id}</small>
+        {adminEditId && (
+          <button className="primary" onClick={onAdminDone}>
+            Back to reports
+          </button>
+        )}
       </div>
     );
   return (
     <>
       <Heading
-        tag="Family registration"
-        title="Plan your complete tour"
-        text="Food, travel and stay charges cover the whole tour—not individual days."
+        tag={adminEditId ? "Administrator edit" : "Family registration"}
+        title={
+          adminEditId
+            ? `Edit ${family.family_name || "family registration"}`
+            : "Plan your complete tour"
+        }
+        text={
+          adminEditId
+            ? "Update any registration step. Inventory and charges will be recalculated when saved."
+            : "Food, travel and stay charges cover the whole tour—not individual days."
+        }
         action={
-          <button className="secondary" onClick={() => setShowPlan(true)}>
-            <CalendarDays />
-            View tour plan
-          </button>
+          adminEditId ? (
+            <button className="secondary" onClick={onAdminDone}>
+              <ChevronLeft />
+              Back to reports
+            </button>
+          ) : (
+            <button className="secondary" onClick={() => setShowPlan(true)}>
+              <CalendarDays />
+              View tour plan
+            </button>
+          )
         }
       />
       {showPlan && <TourPlan tour={tour} onClose={() => setShowPlan(false)} />}
@@ -517,6 +610,19 @@ function Registration({ tour }) {
                       child at the regular charges
                     </label>
                   )}
+                  {people.length > 1 && (
+                    <button
+                      type="button"
+                      className="removePassenger"
+                      onClick={() =>
+                        setPeople((current) =>
+                          current.filter((_, index) => index !== i),
+                        )
+                      }
+                    >
+                      Remove passenger
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -584,9 +690,8 @@ function Registration({ tour }) {
             />
             <div className="rooms">
               {tour.roomTypes.map((x) => {
-                const available =
-                  Number(x.inventory?.remaining_capacity || 0) >=
-                  allocationCount;
+                const remaining = availableRoomCapacity(x);
+                const available = remaining >= allocationCount;
                 return (
                   <button
                     key={x.id}
@@ -602,7 +707,7 @@ function Registration({ tour }) {
                     <small>
                       {money(x.charge_amount)} • {x.capacity} people/unit •{" "}
                       {x.inventory?.available_units || 0} units available (
-                      {x.inventory?.remaining_capacity || 0} people)
+                      {remaining} people)
                     </small>
                     {x.charge_type === "PER_BED" && (
                       <small>
@@ -758,6 +863,8 @@ function Registration({ tour }) {
                 Continue
                 <ChevronRight />
               </>
+            ) : adminEditId ? (
+              "Confirm & save changes"
             ) : (
               "Confirm & submit"
             )}
@@ -1796,7 +1903,7 @@ function RoomInventoryInline({ room, token, onSaved, onAdded }) {
     </div>
   );
 }
-function Reports({ tour, token }) {
+function Reports({ tour, token, onEditRegistration }) {
   const [type, setType] = useState("overall"),
     [busFilter, setBusFilter] = useState(""),
     [roomFilter, setRoomFilter] = useState(""),
@@ -2072,6 +2179,13 @@ function Reports({ tour, token }) {
               <tr key={x.id}>
                 <td>
                   <b>{x.family_name}</b>
+                  <button
+                    type="button"
+                    className="reportEditLink"
+                    onClick={() => onEditRegistration(x.id)}
+                  >
+                    {x.contact_name}
+                  </button>
                   <small>{x.members}</small>
                 </td>
                 <td>{x.member_count}</td>
