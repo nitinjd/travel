@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeft,
   Bus,
   CalendarDays,
   ChevronLeft,
@@ -73,7 +72,7 @@ const BOOKING_CONDITIONS = [
   "Booking will be confirmed only after payment is received.",
   "If any change is required in the plan, accommodation or other arrangements, due diligence will be followed with guidance from the leaders.",
   "Cancellation and refund are not available after booking is confirmed.",
-  "For children aged 0–5, a bus seat or accommodation bed will not be provided unless it is booked exclusively for the child.",
+  "For children aged 0–5, bus seating and accommodation are optional and charged only when selected for the child.",
 ];
 const api = async (url, options = {}) => {
   try {
@@ -144,26 +143,29 @@ export default function App() {
           </span>
         </button>
         {displayTour && (
-          <div className="trip" aria-label="Current tour">
-            <span><CalendarDays size={15} /> {displayTour.start_date} – {displayTour.end_date}</span>
-            <span><MapPin size={15} /> {displayTour.location}</span>
+          <div className="trip">
+            <CalendarDays size={16} />
+            {displayTour.start_date} – {displayTour.end_date}
+            <MapPin size={16} />
+            {displayTour.location}
           </div>
         )}
-        {isAdminPage && token ? (
-          <div className="headerTools">
-            <div className="admin">Administrator</div>
-            <button type="button" className="headerLogout" onClick={logout}>
-              <LogOut size={16} />
-              Logout
-            </button>
-          </div>
-        ) : null}
+        {isAdminPage && token && <div className="admin">Administrator</div>}
       </header>
       <main
         className={
           !isAdminPage ? "publicMain" : !token ? "loginMain" : "adminMain"
         }
       >
+        {isAdminPage && token && (
+          <div className="headerActions">
+            <div className="admin">Administrator</div>
+            <button type="button" className="headerLogout" onClick={logout}>
+              <LogOut size={16} />
+              Logout
+            </button>
+          </div>
+        )}
         <section className="content">
           {error && (
             <div className="alert appError">
@@ -198,7 +200,6 @@ export default function App() {
                 tour={adminTour}
                 token={token}
                 refresh={() => loadAdminTour(adminTour.id)}
-                onBack={() => setTab("tours")}
               />
             ) : (
               <TourList token={token} onSelect={(id) => loadAdminTour(id).then(() => setTab("admin"))} onReports={(id) => loadAdminTour(id).then(() => setTab("reports"))} />
@@ -223,7 +224,6 @@ export default function App() {
                 setEditingRegistrationId(id);
                 setTab("registration");
               }}
-              onBack={() => setTab("tours")}
             />
           )}
         </section>
@@ -352,7 +352,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
       contact_email: "",
     }),
     [people, setPeople] = useState([
-      { name: "", gender: "MALE", age: "", requires_seat_bed: false },
+      { name: "", gender: "MALE", age: "", requires_bus_seat: false, requires_accommodation: false },
     ]),
     [travel, setTravel] = useState(tour.travelOptions[0]?.id),
     [room, setRoom] = useState(tour.roomTypes[0]?.id),
@@ -384,7 +384,8 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
           record.passengers.map((passenger) => ({
             ...passenger,
             age: String(passenger.age),
-            requires_seat_bed: !!passenger.requires_seat_bed,
+            requires_bus_seat: !!passenger.requires_bus_seat,
+            requires_accommodation: !!passenger.requires_accommodation,
           })),
         );
         setTravel(record.travel_option_id);
@@ -398,29 +399,36 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
   }, [adminEditId, token]);
   const travelItem = tour.travelOptions.find((x) => x.id === Number(travel)),
     roomItem = tour.roomTypes.find((x) => x.id === Number(room));
-  const allocationCount = useMemo(
+  const busSeatCount = useMemo(
+    () =>
+      people.filter(
+        (passenger) => Number(passenger.age) >= 6 || passenger.requires_bus_seat,
+      ).length,
+    [people],
+  );
+  const accommodationCount = useMemo(
     () =>
       people.filter(
         (passenger) =>
-          Number(passenger.age) >= 6 || passenger.requires_seat_bed,
+          Number(passenger.age) >= 6 || passenger.requires_accommodation,
       ).length,
     [people],
   );
   const availableRoomCapacity = (item) =>
     Number(item?.inventory?.remaining_capacity || 0) +
     (editRecord && Number(editRecord.room_type_id) === Number(item?.id)
-      ? Number(editRecord.allocation_count || 0)
+      ? Number(editRecord.accommodation_count ?? editRecord.allocation_count ?? 0)
       : 0);
   useEffect(() => {
-    if (availableRoomCapacity(roomItem) >= allocationCount) return;
+    if (availableRoomCapacity(roomItem) >= accommodationCount) return;
     const available = tour.roomTypes.find(
-      (item) => availableRoomCapacity(item) >= allocationCount,
+      (item) => availableRoomCapacity(item) >= accommodationCount,
     );
     if (available) setRoom(available.id);
-  }, [allocationCount, editRecord, room, roomItem, tour.roomTypes]);
+  }, [accommodationCount, editRecord, room, roomItem, tour.roomTypes]);
   const { units, extra } = useMemo(
-    () => calculateAccommodation(roomItem, allocationCount),
-    [roomItem, allocationCount],
+    () => calculateAccommodation(roomItem, accommodationCount),
+    [roomItem, accommodationCount],
   );
   const quote = useMemo(() => {
     const food = people.reduce(
@@ -429,13 +437,13 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
       ),
       tv =
         travelItem?.charge_type === "PER_PERSON"
-          ? allocationCount * travelItem.charge_amount
+          ? busSeatCount * travelItem.charge_amount
           : travelItem?.charge_amount || 0,
       stay =
         units * (roomItem?.charge_amount || 0) +
         extra * (roomItem?.extra_bed_charge || 0);
     return { food, tv, stay, total: food + tv + stay };
-  }, [people, allocationCount, travelItem, roomItem, units, extra, tour]);
+  }, [people, busSeatCount, travelItem, roomItem, units, extra, tour]);
   const update = (i, k, v) =>
     setPeople((p) => p.map((x, n) => (n === i ? { ...x, [k]: v } : x)));
   const advance = () => {
@@ -468,9 +476,9 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
       )
         return setError("Enter a valid name and age for every passenger");
     }
-    if (step === 3 && availableRoomCapacity(roomItem) < allocationCount)
+    if (step === 3 && availableRoomCapacity(roomItem) < accommodationCount)
       return setError(
-        `${roomItem?.name || "Selected accommodation"} has no capacity for ${allocationCount} booked bed(s). Please select another option or ask the administrator to add room inventory.`,
+        `${roomItem?.name || "Selected accommodation"} has no capacity for ${accommodationCount} booked bed(s). Please select another option or ask the administrator to add room inventory.`,
       );
     const completed = ["Passenger details", "Transportation", "Accommodation"];
     setStepNotice(`${completed[step - 1]} saved. Continue to the next step.`);
@@ -570,7 +578,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                 <th>Gender</th>
                 <th>Age</th>
                 <th>Food</th>
-                <th>Seat / bed</th>
+                <th>Child services</th>
               </tr>
             </thead>
             <tbody>
@@ -581,9 +589,15 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                   <td>{person.age}</td>
                   <td>{money(foodChargeForAge(tour, person.age))}</td>
                   <td>
-                    {Number(person.age) >= 6 || person.requires_seat_bed
-                      ? "Booked"
-                      : "Not booked"}
+                    {Number(person.age) >= 6 || person.requires_bus_seat
+                      ? "Bus booked"
+                      : "No bus"}
+                    {Number(person.age) <= 5 && " • "}
+                    {Number(person.age) >= 6 || person.requires_accommodation
+                      ? "Accommodation booked"
+                      : Number(person.age) <= 5
+                        ? "No accommodation"
+                        : "Accommodation booked"}
                   </td>
                 </tr>
               ))}
@@ -597,7 +611,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
             <p>
               <b>{travelItem?.name}</b>
             </p>
-            <p>{allocationCount} paid seat(s)</p>
+            <p>{busSeatCount} bus seat(s) booked</p>
             <p>Assigned bus: {submitted.assigned_bus || "Self travel"}</p>
           </div>
           <div className="confirmationSection">
@@ -763,12 +777,18 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                             ? {
                                 ...item,
                                 age,
-                                requires_seat_bed:
+                                requires_bus_seat:
                                   Number(age) >= 6
                                     ? true
                                     : Number(item.age) >= 6
                                       ? false
-                                      : item.requires_seat_bed,
+                                      : item.requires_bus_seat,
+                                requires_accommodation:
+                                  Number(age) >= 6
+                                    ? true
+                                    : Number(item.age) >= 6
+                                      ? false
+                                      : item.requires_accommodation,
                               }
                             : item,
                         ),
@@ -781,17 +801,29 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                     Food charge: {money(foodChargeForAge(tour, p.age))}
                   </span>
                   {p.age !== "" && Number(p.age) <= 5 && (
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={!!p.requires_seat_bed}
-                        onChange={(e) =>
-                          update(i, "requires_seat_bed", e.target.checked)
-                        }
-                      />
-                      Book an exclusive bus seat and accommodation bed for this
-                      child at the regular charges
-                    </label>
+                    <div className="childServiceOptions">
+                      <span>Child options (age 0–5):</span>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={!!p.requires_bus_seat}
+                          onChange={(e) =>
+                            update(i, "requires_bus_seat", e.target.checked)
+                          }
+                        />
+                        Bus seat ({travelItem?.mode === "SELF" ? "no charge for self travel" : money(travelItem?.charge_amount || 0)})
+                      </label>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={!!p.requires_accommodation}
+                          onChange={(e) =>
+                            update(i, "requires_accommodation", e.target.checked)
+                          }
+                        />
+                        Accommodation bed / room
+                      </label>
+                    </div>
                   )}
                   {people.length > 1 && (
                     <button
@@ -818,7 +850,8 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                     name: "",
                     gender: "MALE",
                     age: "",
-                    requires_seat_bed: false,
+                    requires_bus_seat: false,
+                    requires_accommodation: false,
                   },
                 ])
               }
@@ -833,7 +866,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
             <Title
               icon={<Bus />}
               title="Transportation"
-              sub={`Select one mode • ${allocationCount} paid seat(s) for ${people.length} passenger(s)`}
+              sub={`Select one mode • ${busSeatCount} bus seat(s) for ${people.length} passenger(s)`}
               cost={money(quote.tv)}
             />
             <div className="options">
@@ -855,7 +888,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                   <strong>
                     {x.mode === "SELF"
                       ? "₹0"
-                      : money(x.charge_amount * allocationCount)}
+                      : money(x.charge_amount * busSeatCount)}
                   </strong>
                 </button>
               ))}
@@ -874,7 +907,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
             <div className="rooms">
               {tour.roomTypes.map((x) => {
                 const remaining = availableRoomCapacity(x);
-                const available = remaining >= allocationCount;
+                const available = remaining >= accommodationCount;
                 return (
                   <button
                     key={x.id}
@@ -913,7 +946,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                     {x.description && <small>{x.description}</small>}
                     {!available && (
                       <small className="soldOut">
-                        Unavailable for {allocationCount} booked bed(s) — no
+                        Unavailable for {accommodationCount} booked bed(s) — no
                         beds/rooms remain
                       </small>
                     )}
@@ -923,7 +956,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
             </div>
             <div className="automaticAllocation" role="status">
               <b>
-                Automatically calculated: {allocationCount} paid bed(s) for{" "}
+                Automatically calculated: {accommodationCount} paid bed(s) for{" "}
                 {people.length} passenger(s)
               </b>
               <span>
@@ -968,10 +1001,8 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                     {index + 1}. {person.name} — {person.gender} — Age{" "}
                     {person.age}
                     {Number(person.age) <= 5
-                      ? person.requires_seat_bed
-                        ? " — exclusive seat/bed booked"
-                        : " — no seat/bed booked"
-                      : ""}
+                      ? ` — bus: ${person.requires_bus_seat ? "yes" : "no"} • accommodation: ${person.requires_accommodation ? "yes" : "no"}`
+                      : " — bus: yes • accommodation: yes"}
                   </p>
                 ))}
               </div>
@@ -980,7 +1011,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                 <p>
                   {travelItem?.name}
                   {travelItem?.mode === "BUS"
-                    ? ` • ${allocationCount} seats required`
+                    ? ` • ${busSeatCount} seats required`
                     : ""}
                 </p>
               </div>
@@ -1283,25 +1314,23 @@ function TourList({ token, selectedTourId, onSelect, onReports }) {
                     </span>
                   </td>
                   <td>
-                    <div className="tourActions">
-                      <button
-                        type="button"
-                        className="primary"
-                        disabled={opening !== null}
-                        onClick={() => open(item.id)}
-                      >
-                        {opening === item.id ? "Opening…" : "Open setup"}
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary reportTourButton"
-                        disabled={opening !== null}
-                        onClick={() => openReports(item.id)}
-                      >
-                        <Download size={15} />
-                        Reports
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={opening !== null}
+                      onClick={() => open(item.id)}
+                    >
+                      {opening === item.id ? "Opening…" : "Open setup"}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary reportTourButton"
+                      disabled={opening !== null}
+                      onClick={() => openReports(item.id)}
+                    >
+                      <Download size={15} />
+                      Reports
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -1312,7 +1341,7 @@ function TourList({ token, selectedTourId, onSelect, onReports }) {
     </>
   );
 }
-function Admin({ tour, token, refresh, onBack }) {
+function Admin({ tour, token, refresh }) {
   const [setupSection, setSetupSection] = useState("tour"),
     [t, setT] = useState({ ...tour }),
     [travels, setTravels] = useState(tour.travelOptions),
@@ -1491,23 +1520,17 @@ function Admin({ tour, token, refresh, onBack }) {
         title="Trip master setup"
         text="Configure tour, travel, accommodation and day-wise itinerary."
         action={
-          <div className="headingActions">
-            <button type="button" className="secondary backButton" onClick={onBack}>
-              <ArrowLeft size={16} />
-              Tour list
+          setupSection === "tour" ? (
+            <button
+              className="primary"
+              disabled={!!saving}
+              onClick={() => save(`/api/admin/tours/${tour.id}`, t, "Tour")}
+            >
+              {saving === `/api/admin/tours/${tour.id}`
+                ? "Saving tour…"
+                : "Save tour"}
             </button>
-            {setupSection === "tour" && (
-              <button
-                className="primary"
-                disabled={!!saving}
-                onClick={() => save(`/api/admin/tours/${tour.id}`, t, "Tour")}
-              >
-                {saving === `/api/admin/tours/${tour.id}`
-                  ? "Saving tour…"
-                  : "Save tour"}
-              </button>
-            )}
-          </div>
+          ) : null
         }
       />
       <div className="setupSubmenu" role="tablist" aria-label="Trip setup">
@@ -2348,7 +2371,7 @@ function RoomInventoryInline({ room, token, onSaved, onAdded }) {
     </div>
   );
 }
-function Reports({ tour, token, onEditRegistration, onBack }) {
+function Reports({ tour, token, onEditRegistration }) {
   const [type, setType] = useState("overall"),
     [busFilter, setBusFilter] = useState(""),
     [roomFilter, setRoomFilter] = useState(""),
@@ -2441,16 +2464,10 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
         title="Trip reports"
         text="View on screen or download a true Excel workbook."
         action={
-          <div className="headingActions">
-            <button type="button" className="secondary backButton" onClick={onBack}>
-              <ArrowLeft size={16} />
-              Tour list
-            </button>
-            <button className="primary" onClick={download}>
-              <Download size={16} />
-              Download Excel
-            </button>
-          </div>
+          <button className="primary" onClick={download}>
+            <Download />
+            Download Excel
+          </button>
         }
       />
       {error && <div className="alert">{error}</div>}
@@ -2622,6 +2639,8 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
                 "Family",
                 "Mandal",
                 "Members",
+                "Bus seats",
+                "Accommodation",
                 "Travel mode",
                 "Assigned bus",
                 "Room type",
@@ -2658,6 +2677,8 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
                 </td>
                 <td>{x.mandal}</td>
                 <td>{x.member_count}</td>
+                <td>{x.bus_seat_count ?? "—"}</td>
+                <td>{x.accommodation_count ?? "—"}</td>
                 <td>{x.travel_mode}</td>
                 <td>{x.assigned_bus || "Self"}</td>
                 <td>{x.room_type}</td>

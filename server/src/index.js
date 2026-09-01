@@ -822,12 +822,18 @@ app.post(
   asyncRoute(async (req, res) => res.json(await calculateQuote(req.body))),
 );
 async function calculateQuote(body, connection = pool) {
-  const passengers = (body.passengers || []).map((passenger) => ({
-    ...passenger,
-    age: Number(passenger.age),
-    requires_seat_bed:
-      Number(passenger.age) >= 6 || passenger.requires_seat_bed === true,
-  }));
+  const passengers = (body.passengers || []).map((passenger) => {
+    const age = Number(passenger.age);
+    const legacy = passenger.requires_seat_bed === true;
+    return {
+      ...passenger,
+      age,
+      requires_bus_seat:
+        age >= 6 || passenger.requires_bus_seat === true || (age <= 5 && legacy),
+      requires_accommodation:
+        age >= 6 || passenger.requires_accommodation === true || (age <= 5 && legacy),
+    };
+  });
   const count = passengers.length;
   if (!count)
     throw Object.assign(new Error("At least one passenger is required"), {
@@ -847,8 +853,11 @@ async function calculateQuote(body, connection = pool) {
   );
   if (!tour || !travel || !room)
     throw Object.assign(new Error("Invalid tour selection"), { status: 400 });
-  const allocationCount = passengers.filter(
-    (passenger) => passenger.requires_seat_bed,
+  const busSeatCount = passengers.filter(
+    (passenger) => passenger.requires_bus_seat,
+  ).length;
+  const accommodationCount = passengers.filter(
+    (passenger) => passenger.requires_accommodation,
   ).length;
   const capacity = Math.max(1, Number(room.capacity || 1));
   const maxExtra = room.extra_bed_allowed
@@ -856,14 +865,14 @@ async function calculateQuote(body, connection = pool) {
     : 0;
   const units =
     room.charge_type === "PER_BED"
-      ? allocationCount
-      : allocationCount
-        ? Math.max(1, Math.ceil(allocationCount / (capacity + maxExtra)))
+      ? accommodationCount
+      : accommodationCount
+        ? Math.max(1, Math.ceil(accommodationCount / (capacity + maxExtra)))
         : 0;
   const extraBeds =
     room.charge_type === "PER_BED"
       ? 0
-      : Math.max(0, allocationCount - units * capacity);
+      : Math.max(0, accommodationCount - units * capacity);
   const food = passengers.reduce((sum, passenger) => {
     const charge =
       passenger.age <= 5
@@ -875,14 +884,16 @@ async function calculateQuote(body, connection = pool) {
   }, 0);
   const travelAmount =
     travel.charge_type === "PER_PERSON"
-      ? allocationCount * Number(travel.charge_amount)
+      ? busSeatCount * Number(travel.charge_amount)
       : Number(travel.charge_amount);
   const accommodation =
     units * Number(room.charge_amount) +
     extraBeds * Number(room.extra_bed_charge || 0);
   return {
     passenger_count: count,
-    allocation_count: allocationCount,
+    allocation_count: busSeatCount,
+    bus_seat_count: busSeatCount,
+    accommodation_count: accommodationCount,
     passengers,
     food_amount: food,
     travel_amount: travelAmount,
@@ -1096,22 +1107,22 @@ app.post(
       );
       for (const p of q.passengers)
         await c.query(
-          "INSERT INTO passengers(registration_id,name,gender,age,requires_seat_bed) VALUES(?,?,?,?,?)",
-          [r.insertId, p.name, p.gender, p.age, p.requires_seat_bed ? 1 : 0],
+          "INSERT INTO passengers(registration_id,name,gender,age,requires_seat_bed,requires_bus_seat,requires_accommodation) VALUES(?,?,?,?,?,?,?)",
+          [r.insertId, p.name, p.gender, p.age, (p.requires_bus_seat && p.requires_accommodation) ? 1 : 0, p.requires_bus_seat ? 1 : 0, p.requires_accommodation ? 1 : 0],
         );
       const rooms = await allocateRooms(
         c,
         r.insertId,
         q.room,
         q.units,
-        q.allocation_count,
+        q.accommodation_count,
         q.extraBeds,
       );
       const bus = await allocateBus(
         c,
         r.insertId,
         q.travel,
-        q.allocation_count,
+        q.bus_seat_count,
       );
       return { id: r.insertId, rooms, bus };
     });
@@ -1137,14 +1148,17 @@ app.get(
     if (!registration)
       return res.status(404).json({ message: "Registration not found" });
     const [passengers] = await pool.query(
-      "SELECT id,name,gender,age,requires_seat_bed FROM passengers WHERE registration_id=? ORDER BY id",
+      "SELECT id,name,gender,age,requires_seat_bed,requires_bus_seat,requires_accommodation FROM passengers WHERE registration_id=? ORDER BY id",
       [req.params.id],
     );
     res.json({
       ...registration,
       passengers,
       allocation_count: passengers.filter(
-        (passenger) => passenger.requires_seat_bed,
+        (passenger) => passenger.requires_bus_seat || passenger.requires_seat_bed,
+      ).length,
+      accommodation_count: passengers.filter(
+        (passenger) => passenger.requires_accommodation || passenger.requires_seat_bed,
       ).length,
     });
   }),
@@ -1278,13 +1292,15 @@ app.put(
       );
       for (const passenger of quote.passengers)
         await c.query(
-          "INSERT INTO passengers(registration_id,name,gender,age,requires_seat_bed) VALUES(?,?,?,?,?)",
+          "INSERT INTO passengers(registration_id,name,gender,age,requires_seat_bed,requires_bus_seat,requires_accommodation) VALUES(?,?,?,?,?,?,?)",
           [
             req.params.id,
             String(passenger.name).trim(),
             passenger.gender,
             passenger.age,
-            passenger.requires_seat_bed ? 1 : 0,
+            (passenger.requires_bus_seat && passenger.requires_accommodation) ? 1 : 0,
+            passenger.requires_bus_seat ? 1 : 0,
+            passenger.requires_accommodation ? 1 : 0,
           ],
         );
       const rooms = await allocateRooms(
@@ -1292,14 +1308,14 @@ app.put(
         req.params.id,
         quote.room,
         quote.units,
-        quote.allocation_count,
+        quote.accommodation_count,
         quote.extraBeds,
       );
       const bus = await allocateBus(
         c,
         req.params.id,
         quote.travel,
-        quote.allocation_count,
+        quote.bus_seat_count,
       );
       return { rooms, bus };
     });
@@ -1321,9 +1337,11 @@ const reportQuery = `SELECT
   r.amount_received,r.admin_comments,r.status,t.name tour_name,t.location,
   vo.name travel_mode,vo.mode travel_mode_type,rt.name room_type,
   COUNT(p.id) member_count,
+  SUM(CASE WHEN p.age>=6 OR p.requires_bus_seat=1 THEN 1 ELSE 0 END) bus_seat_count,
+  SUM(CASE WHEN p.age>=6 OR p.requires_accommodation=1 THEN 1 ELSE 0 END) accommodation_count,
   GROUP_CONCAT(CONCAT(p.name,' (',p.gender,', ',p.age,
-    CASE WHEN p.age<=5 THEN CASE WHEN p.requires_seat_bed=1
-      THEN ', child seat/bed booked' ELSE ', no child seat/bed' END ELSE '' END,
+    CASE WHEN p.age<=5 THEN CONCAT(', bus ',CASE WHEN p.requires_bus_seat=1 THEN 'yes' ELSE 'no' END,
+      ', accommodation ',CASE WHEN p.requires_accommodation=1 THEN 'yes' ELSE 'no' END) ELSE ', bus yes, accommodation yes' END,
     ')') ORDER BY p.id SEPARATOR ', ') members,
   (SELECT GROUP_CONCAT(CONCAT(ri.room_number,' / Floor ',
     COALESCE(ri.floor_number,''),' (',
@@ -1469,6 +1487,8 @@ app.get(
       Contact: x.contact_name,
       Phone: x.contact_phone,
       Members: x.member_count,
+      "Bus Seats": x.bus_seat_count,
+      "Accommodation Passengers": x.accommodation_count,
       "Member Details": x.members,
       "Travel Mode": x.travel_mode,
       "Assigned Bus": x.assigned_bus || "Self",
