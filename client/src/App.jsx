@@ -98,19 +98,32 @@ const api = async (url, options = {}) => {
 export default function App() {
   const isAdminPage = window.location.pathname.startsWith("/admin");
   const [tour, setTour] = useState(null),
-    [tab, setTab] = useState("admin"),
+    [selectedAdminTour, setSelectedAdminTour] = useState(null),
+    [tab, setTab] = useState("tours"),
     [editingRegistrationId, setEditingRegistrationId] = useState(null),
     [token, setToken] = useState(localStorage.getItem("tourToken")),
     [error, setError] = useState("");
   useEffect(() => {
     api("/api/tours/active")
       .then(setTour)
-      .catch((e) => setError(e.message));
-  }, []);
+      .catch((e) => {
+        if (!isAdminPage) setError(e.message);
+      });
+  }, [isAdminPage]);
+  const adminTour = selectedAdminTour || tour;
+  const displayTour = isAdminPage ? adminTour : tour;
+  const loadAdminTour = (id) =>
+    api(`/api/admin/tours/${id}/config`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then((selected) => {
+      setSelectedAdminTour(selected);
+      return selected;
+    });
   const logout = () => {
     localStorage.removeItem("tourToken");
     setToken(null);
-    setTab("admin");
+    setSelectedAdminTour(null);
+    setTab("tours");
   };
   return (
     <>
@@ -120,12 +133,12 @@ export default function App() {
           <b>TourSetu</b>
           <small>Trip Manager</small>
         </div>
-        {tour && (
+        {displayTour && (
           <div className="trip">
             <CalendarDays size={16} />
-            {tour.start_date} – {tour.end_date}
+            {displayTour.start_date} – {displayTour.end_date}
             <MapPin size={16} />
-            {tour.location}
+            {displayTour.location}
           </div>
         )}
         {isAdminPage && token && <div className="admin">Administrator</div>}
@@ -138,8 +151,18 @@ export default function App() {
         {isAdminPage && token && (
           <nav>
             <button
+              className={tab === "tours" ? "active" : ""}
+              onClick={() => {
+                setEditingRegistrationId(null);
+                setTab("tours");
+              }}
+            >
+              <CalendarDays />
+              Tours
+            </button>
+            <button
               className={tab === "admin" ? "active" : ""}
-              onClick={() => setTab("admin")}
+              onClick={() => setTab(selectedAdminTour ? "admin" : "tours")}
             >
               <Settings2 />
               Trip Setup
@@ -148,7 +171,7 @@ export default function App() {
               className={tab === "reports" ? "active" : ""}
               onClick={() => {
                 setEditingRegistrationId(null);
-                setTab("reports");
+                setTab(adminTour ? "reports" : "tours");
               }}
             >
               <Download />
@@ -167,40 +190,51 @@ export default function App() {
               <button onClick={() => window.location.reload()}>Retry</button>
             </div>
           )}
-          {!tour ? (
-            <div className="card">Loading tour…</div>
-          ) : !isAdminPage ? (
-            <Registration tour={tour} />
+          {!isAdminPage ? (
+            !tour ? (
+              <div className="card">Loading tour…</div>
+            ) : (
+              <Registration tour={tour} />
+            )
           ) : !token ? (
             <Login
               onLogin={(x) => {
                 localStorage.setItem("tourToken", x);
                 setToken(x);
+                setTab("tours");
               }}
             />
-          ) : tab === "admin" ? (
-            <Admin
-              tour={tour}
+          ) : tab === "tours" ? (
+            <TourList
               token={token}
-              refresh={() => api("/api/tours/active").then(setTour)}
+              selectedTourId={selectedAdminTour?.id}
+              onSelect={(id) => loadAdminTour(id).then(() => setTab("admin"))}
             />
+          ) : tab === "admin" ? (
+            adminTour ? (
+              <Admin
+                tour={adminTour}
+                token={token}
+                refresh={() => loadAdminTour(adminTour.id)}
+              />
+            ) : (
+              <TourList token={token} onSelect={loadAdminTour} />
+            )
           ) : tab === "registration" && editingRegistrationId ? (
             <Registration
-              tour={tour}
+              tour={adminTour}
               token={token}
               adminEditId={editingRegistrationId}
               onAdminDone={() => {
-                api("/api/tours/active")
-                  .then(setTour)
-                  .finally(() => {
-                    setEditingRegistrationId(null);
-                    setTab("reports");
-                  });
+                loadAdminTour(adminTour.id).finally(() => {
+                  setEditingRegistrationId(null);
+                  setTab("reports");
+                });
               }}
             />
           ) : (
             <Reports
-              tour={tour}
+              tour={adminTour}
               token={token}
               onEditRegistration={(id) => {
                 setEditingRegistrationId(id);
@@ -1183,6 +1217,92 @@ function Login({ onLogin }) {
         Sign in
       </button>
     </div>
+  );
+}
+function TourList({ token, selectedTourId, onSelect }) {
+  const [tours, setTours] = useState([]),
+    [loading, setLoading] = useState(true),
+    [opening, setOpening] = useState(null),
+    [error, setError] = useState("");
+  useEffect(() => {
+    setLoading(true);
+    api("/api/admin/tours", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(setTours)
+      .catch((requestError) => setError(requestError.message))
+      .finally(() => setLoading(false));
+  }, [token]);
+  const open = async (id) => {
+    setOpening(id);
+    setError("");
+    try {
+      await onSelect(id);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setOpening(null);
+    }
+  };
+  return (
+    <>
+      <Heading
+        tag="Administrator"
+        title="Tours"
+        text="Select a tour to open and manage its complete setup."
+      />
+      {error && <div className="alert">{error}</div>}
+      <div className="card table tourList">
+        {loading ? (
+          <p className="tourListMessage">Loading tours…</p>
+        ) : !tours.length ? (
+          <p className="tourListMessage">No tours are configured.</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Tour</th>
+                <th>Location</th>
+                <th>Start date</th>
+                <th>End date</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tours.map((item) => (
+                <tr
+                  key={item.id}
+                  className={selectedTourId === item.id ? "selectedTour" : ""}
+                >
+                  <td>
+                    <b>{item.name}</b>
+                  </td>
+                  <td>{item.location}</td>
+                  <td>{item.start_date}</td>
+                  <td>{item.end_date}</td>
+                  <td>
+                    <span className={`tourStatus ${item.status.toLowerCase()}`}>
+                      {item.status}
+                    </span>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={opening !== null}
+                      onClick={() => open(item.id)}
+                    >
+                      {opening === item.id ? "Opening…" : "Open setup"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </>
   );
 }
 function Admin({ tour, token, refresh }) {
