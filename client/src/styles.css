@@ -1163,3 +1163,157 @@ html[data-theme="dark"] .roomImagePreview { background:#0f172a; }
 }
 
 @media (max-width: 550px) { .passengerField:first-child { grid-column: 1 / -1; } .headerActions { margin-left:auto; } .brandText b { font-size:14px; } }
+
+/* Final responsive / full-width / softer-dark-theme pass */
+:root {
+  --page-bg: #f4f7fb;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --surface-3: #eef2f7;
+  --text: #172033;
+  --muted: #667085;
+  --muted-2: #475467;
+  --line: #d7dee9;
+}
+html, body, #root { width: 100%; min-width: 0; }
+body { overflow-x: hidden; }
+main { width: 100%; }
+.content {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: clamp(20px, 2.5vw, 36px) clamp(14px, 3vw, 48px) 60px;
+}
+.content > * { min-width: 0; }
+.form, .steps { width: 100%; }
+
+/* Softer dark mode: dark enough for contrast without becoming near-black */
+html[data-theme="dark"] {
+  --page-bg: #202a39;
+  --surface: #2b3748;
+  --surface-2: #313e50;
+  --surface-3: #364458;
+  --text: #eef2f7;
+  --muted: #b6c0ce;
+  --muted-2: #c7d0dc;
+  --line: #4a5a70;
+}
+html[data-theme="dark"],
+html[data-theme="dark"] body,
+html[data-theme="dark"] main { background: var(--page-bg); color: var(--text); }
+html[data-theme="dark"] header { background: #30405a; }
+html[data-theme="dark"] .card,
+html[data-theme="dark"] .setupSubmenu,
+html[data-theme="dark"] .login { background: var(--surface); border-color: var(--line); color: var(--text); }
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea { background: #263244; color: var(--text); border-color: #56677e; }
+html[data-theme="dark"] th { background: #3a485b; color: #d7dee8; }
+html[data-theme="dark"] th,
+html[data-theme="dark"] td { border-color: var(--line); }
+html[data-theme="dark"] .filters button,
+html[data-theme="dark"] .secondary,
+html[data-theme="dark"] .setupSubmenu button { background: #364458; color: #e1e7ef; border-color: #586980; }
+html[data-theme="dark"] .filters button.active,
+html[data-theme="dark"] .setupSubmenu button.active { background: #356bd8; color: #fff; }
+html[data-theme="dark"] .notice,
+html[data-theme="dark"] .inventoryStatus,
+html[data-theme="dark"] .summarySaved { background: #33445e; border-color: #516889; color: #e4ebf5; }
+html[data-theme="dark"] .roomConfig,
+html[data-theme="dark"] .travelConfig,
+html[data-theme="dark"] .configCard { background: #344154; border-color: #516075; }
+html[data-theme="dark"] .roomInventoryInline,
+html[data-theme="dark"] .itineraryConfig { background: #303d4f; border-color: #516075; }
+html[data-theme="dark"] .newRoomType,
+html[data-theme="dark"] .addBus { background: #3d3b31; }
+html[data-theme="dark"] .tourList tr.selectedTour td { background: #33486f; }
+html[data-theme="dark"] .tourStatus { background: #3a485a; color: #dbe3ee; }
+html[data-theme="dark"] .bookingConditions { background: #303d4f; border-color: #516075; }
+html[data-theme="dark"] .roomOptionImage,
+html[data-theme="dark"] .roomImagePreview { background: #283446; }
+html[data-theme="dark"] .childServiceOptions > span,
+html[data-theme="dark"] .configField > span,
+html[data-theme="dark"] .configChecks > span { color: #c7d0dc; }
+
+/* Desktop: use the full content width while retaining comfortable gutters */
+@media (min-width: 1200px) {
+  .content { padding-left: 32px; padding-right: 32px; }
+  .adminMain .content, .publicMain .content { max-width: none; }
+}
+
+/* Tablet/mobile: every major layout collapses cleanly */
+@media (max-width: 900px) {
+  header { height: auto; min-height: 64px; padding: 10px 14px; flex-wrap: wrap; }
+  .brandLink { min-width: 0; }
+  .brandText { min-width: 0; }
+  .brandText b, .brandText small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .headerActions { flex-wrap: wrap; }
+  .content { padding: 18px 14px 42px; }
+  .card { padding: 18px; border-radius: 14px; }
+  .heading { align-items: stretch; }
+  .headingActions { width: 100%; }
+  .headingActions > button { min-width: 0; }
+  .steps { grid-template-columns: repeat(4, minmax(0, 1fr)); overflow-x: auto; }
+  .steps div { min-width: 130px; }
+  .tourList table { table-layout: auto; }
+  .tourList table, .tourList tbody, .tourList tr, .tourList td { width: 100%; }
+  .tourList td:last-child { white-space: normal; }
+  .tourList td:last-child .primary, .tourList td:last-child .secondary { display: inline-flex; margin: 2px 6px 2px 0; }
+  .reportTable { font-size: 12px; }
+}
+
+@media (max-width: 650px) {
+  header { gap: 8px; }
+  .logo { width: 36px; height: 36px; border-radius: 10px; }
+  .brandText b { font-size: 15px; }
+  .brandText small { font-size: 10px; }
+  .headerActions { margin-left: auto; }
+  .admin { display: inline-flex; align-items: center; font-size: 11px; padding: 7px 9px; }
+  .headerLogout { height: 36px; padding: 0 9px; }
+  .themeToggle { width: 36px; height: 36px; }
+  .content { padding: 14px 10px 32px; }
+  .card { padding: 14px; }
+  .heading h1 { font-size: 24px; line-height: 1.15; }
+  .title { align-items: flex-start; gap: 10px; }
+  .title > div { min-width: 0; }
+  .title h2 { font-size: 19px; }
+  .steps { margin-bottom: 14px; }
+  .steps div { min-width: 105px; font-size: 11px; }
+  .steps b { width: 25px; height: 25px; }
+
+  /* Prevent desktop-sized tables from forcing the page wider */
+  .table, .reportTableWrap { width: 100%; max-width: 100%; overflow: visible !important; }
+  .table > table:not(.reportTable),
+  .table > table:not(.reportTable) tbody,
+  .table > table:not(.reportTable) tr,
+  .table > table:not(.reportTable) td,
+  .table > table:not(.reportTable) th { max-width: 100%; }
+
+  /* Mobile-friendly report cards */
+  .reportTable thead { display: none; }
+  .reportTable, .reportTable tbody, .reportTable tr, .reportTable td { display: block; width: 100% !important; }
+  .reportTable tr { margin-bottom: 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+  .reportTable td { display: grid; grid-template-columns: minmax(92px, 34%) minmax(0, 1fr); gap: 8px; align-items: start; padding: 7px 0; border-bottom: 1px dashed var(--line); }
+  .reportTable td:last-child { border-bottom: 0; }
+  .reportTable td::before { content: attr(data-label); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; font-weight: 800; color: var(--muted); }
+  .reportTable .receivedCell, .reportTable .commentCell { text-align: left; }
+  .reportTable .receivedCell input { justify-self: start; }
+  .commentCell textarea { width: 100%; min-height: 46px; }
+
+  .floatingError { right: 10px; bottom: 10px; width: calc(100vw - 20px); max-width: none; }
+}
+
+@media (max-width: 480px) {
+  header { align-items: center; }
+  .brandLink { flex: 1 1 auto; }
+  .headerActions { flex: 0 0 auto; }
+  .admin { display: none; }
+  .headerLogout { font-size: 0; gap: 0; width: 36px; justify-content: center; padding: 0; }
+  .content { padding-left: 8px; padding-right: 8px; }
+  .card { padding: 12px; }
+  .headingActions { display: grid; grid-template-columns: 1fr; }
+  .headingActions > button { width: 100%; }
+  .form { max-width: none; }
+  .steps { width: calc(100vw - 16px); margin-left: -0px; }
+  .reportTable td { grid-template-columns: 88px minmax(0, 1fr); font-size: 12px; }
+}
