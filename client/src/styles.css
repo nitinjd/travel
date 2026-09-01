@@ -82,6 +82,11 @@ nav {
   flex-direction: column;
   gap: 7px;
 }
+nav .logoutButton {
+  margin-top: auto;
+  color: #9e3229;
+  background: #fff0ed;
+}
 nav button {
   height: 44px;
   border: 0;
@@ -234,6 +239,39 @@ select:focus {
   grid-template-columns: 1.8fr 1fr 0.7fr;
   gap: 10px;
   margin-bottom: 10px;
+}
+.passengerEntry {
+  padding: 10px;
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fafbfc;
+}
+.passengerEntry .passenger {
+  margin-bottom: 7px;
+}
+.passengerPricing {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.passengerPricing label,
+.termsAcceptance {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  color: #344054;
+}
+.passengerPricing input,
+.termsAcceptance input {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
 }
 .link {
   border: 0;
@@ -398,6 +436,55 @@ footer {
   grid-row: span 2;
   color: var(--green);
   font-size: 19px;
+}
+.bookingConditions {
+  margin-top: 18px;
+  padding: 15px 17px;
+  border: 1px solid #e8c77d;
+  border-radius: 10px;
+  background: #fff9eb;
+}
+.bookingConditions ol {
+  margin: 9px 0 0;
+  padding-left: 21px;
+}
+.bookingConditions li {
+  margin: 6px 0;
+  color: #475467;
+  line-height: 1.45;
+}
+.bookingConditions.compact li:not(:first-child):not(:last-child) {
+  display: none;
+}
+.paymentCommitment {
+  margin-top: 18px;
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.paymentCommitment label {
+  margin: 0;
+}
+.termsAcceptance {
+  margin-top: 14px;
+  padding: 13px;
+  border-radius: 9px;
+  font-weight: 700;
+  background: #eef3ff;
+}
+.grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.foodConfig {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.foodConfig h3 {
+  margin: 0 0 12px;
+  font-size: 15px;
 }
 .bill {
   border: 1px solid var(--line);
@@ -651,6 +738,7 @@ td small {
     font-size: 0;
   }
   .grid2,
+  .grid3,
   .timeline,
   .stats {
     grid-template-columns: 1fr;
@@ -660,6 +748,10 @@ td small {
   }
   .passenger input:first-child {
     grid-column: 1/-1;
+  }
+  .passengerPricing {
+    align-items: flex-start;
+    flex-direction: column;
   }
   .summary {
     grid-template-columns: 1fr 1fr;
