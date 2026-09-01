@@ -1,6 +1,43 @@
 .editor h2 {
   margin-bottom: 14px;
 }
+.tourList table {
+  min-width: 760px;
+}
+.tourListMessage {
+  padding: 22px;
+  color: var(--muted);
+}
+.tourList tr.selectedTour td {
+  background: #eef3ff;
+}
+.tourList td:last-child {
+  width: 130px;
+}
+.tourList .primary {
+  min-height: 38px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+.tourStatus {
+  display: inline-flex;
+  padding: 5px 9px;
+  border-radius: 20px;
+  color: #475467;
+  background: #eef1f6;
+  font-size: 11px;
+  font-weight: 800;
+}
+.tourStatus.active {
+  color: #1d4ed8;
+  background: #e8eefc;
+}
+.tourStatus.closed {
+  color: #9e3229;
+  background: #fff0ed;
+}
 .setupSubmenu {
   display: grid;
   grid-template-columns: repeat(4, minmax(140px, 1fr));
