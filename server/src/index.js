@@ -103,6 +103,16 @@ app.get(
       // Keep the existing application usable until migration 05 is executed.
       if (error.code !== "ER_NO_SUCH_TABLE") throw error;
     }
+    let roomTypeImages = [[]];
+    try {
+      roomTypeImages = await pool.query(
+        "SELECT rti.id,rti.room_type_id,rti.file_name,UNIX_TIMESTAMP(rti.updated_at) version FROM room_type_images rti JOIN room_types rt ON rt.id=rti.room_type_id WHERE rt.tour_id=?",
+        [tour.id],
+      );
+    } catch (error) {
+      // Keep the existing application usable until migration 08 is executed.
+      if (error.code !== "ER_NO_SUCH_TABLE") throw error;
+    }
     const inventory = await getInventory(tour.id);
     const travel = travelOptions[0].map((x) => ({
       ...x,
@@ -110,6 +120,12 @@ app.get(
     }));
     const rooms = roomTypes[0].map((x) => ({
       ...x,
+      image: roomTypeImages[0]
+        .filter((image) => image.room_type_id === x.id)
+        .map((image) => ({
+          ...image,
+          url: `/api/room-type-images/${image.id}?v=${image.version}`,
+        }))[0],
       inventory: inventory.rooms.find((r) => r.room_type_id === x.id) || {
         total_units: 0,
         available_units: 0,
@@ -138,6 +154,18 @@ app.get(
   asyncRoute(async (req, res) => {
     const [[image]] = await pool.query(
       "SELECT mime_type,image_data FROM itinerary_images WHERE id=?",
+      [req.params.id],
+    );
+    if (!image) return res.status(404).end();
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.type(image.mime_type).send(image.image_data);
+  }),
+);
+app.get(
+  "/api/room-type-images/:id",
+  asyncRoute(async (req, res) => {
+    const [[image]] = await pool.query(
+      "SELECT mime_type,image_data FROM room_type_images WHERE id=?",
       [req.params.id],
     );
     if (!image) return res.status(404).end();
@@ -376,6 +404,49 @@ app.put(
         req.params.id,
       ],
     );
+    res.json({ success: true });
+  }),
+);
+app.post(
+  "/api/admin/room-types/:id/image",
+  requireAdmin,
+  imageUpload.single("image"),
+  asyncRoute(async (req, res) => {
+    if (!req.file)
+      return res.status(400).json({
+        message: "Select a JPG, PNG, WebP or GIF room image up to 5 MB",
+      });
+    const [[room]] = await pool.query("SELECT id FROM room_types WHERE id=?", [
+      req.params.id,
+    ]);
+    if (!room) return res.status(404).json({ message: "Room type not found" });
+    await pool.query(
+      "INSERT INTO room_type_images(room_type_id,file_name,mime_type,image_data) VALUES(?,?,?,?) ON DUPLICATE KEY UPDATE file_name=VALUES(file_name),mime_type=VALUES(mime_type),image_data=VALUES(image_data)",
+      [
+        req.params.id,
+        req.file.originalname,
+        req.file.mimetype,
+        req.file.buffer,
+      ],
+    );
+    const [[image]] = await pool.query(
+      "SELECT id,file_name FROM room_type_images WHERE room_type_id=?",
+      [req.params.id],
+    );
+    res.json({
+      ...image,
+      room_type_id: Number(req.params.id),
+      url: `/api/room-type-images/${image.id}?v=${Date.now()}`,
+    });
+  }),
+);
+app.delete(
+  "/api/admin/room-types/:id/image",
+  requireAdmin,
+  asyncRoute(async (req, res) => {
+    await pool.query("DELETE FROM room_type_images WHERE room_type_id=?", [
+      req.params.id,
+    ]);
     res.json({ success: true });
   }),
 );
