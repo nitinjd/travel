@@ -300,8 +300,10 @@ button.danger {
 }
 .heroCarousel {
   position: relative;
-  height: clamp(230px, 34vw, 410px);
-  margin: 0 0 28px;
+  width: 100%;
+  max-width: 900px;
+  height: clamp(180px, 25vw, 300px);
+  margin: 0 auto 22px;
   overflow: hidden;
   border-radius: 18px;
   background: #172554;
