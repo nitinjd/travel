@@ -161,13 +161,16 @@ app.post(
   asyncRoute(async (req, res) => {
     const t = req.body;
     const [result] = await pool.query(
-      "INSERT INTO tours(name,location,start_date,end_date,food_charge_per_person,estimated_misc_expense,status) VALUES(?,?,?,?,?,?,?)",
+      "INSERT INTO tours(name,location,start_date,end_date,food_charge_per_person,food_charge_age_0_5,food_charge_age_6_12,food_charge_age_13_plus,estimated_misc_expense,status) VALUES(?,?,?,?,?,?,?,?,?,?)",
       [
         t.name,
         t.location,
         t.start_date,
         t.end_date,
         t.food_charge_per_person || 0,
+        t.food_charge_age_0_5 || 0,
+        t.food_charge_age_6_12 || 300,
+        t.food_charge_age_13_plus || 1000,
         t.estimated_misc_expense || 0,
         t.status || "DRAFT",
       ],
@@ -181,13 +184,16 @@ app.put(
   asyncRoute(async (req, res) => {
     const t = req.body;
     await pool.query(
-      "UPDATE tours SET name=?,location=?,start_date=?,end_date=?,food_charge_per_person=?,estimated_misc_expense=?,status=? WHERE id=?",
+      "UPDATE tours SET name=?,location=?,start_date=?,end_date=?,food_charge_per_person=?,food_charge_age_0_5=?,food_charge_age_6_12=?,food_charge_age_13_plus=?,estimated_misc_expense=?,status=? WHERE id=?",
       [
         t.name,
         t.location,
         t.start_date,
         t.end_date,
         t.food_charge_per_person || 0,
+        t.food_charge_age_0_5 || 0,
+        t.food_charge_age_6_12 || 0,
+        t.food_charge_age_13_plus || 0,
         t.estimated_misc_expense || 0,
         t.status,
         req.params.id,
@@ -598,7 +604,13 @@ app.post(
   asyncRoute(async (req, res) => res.json(await calculateQuote(req.body))),
 );
 async function calculateQuote(body, connection = pool) {
-  const count = body.passengers?.length || 0;
+  const passengers = (body.passengers || []).map((passenger) => ({
+    ...passenger,
+    age: Number(passenger.age),
+    requires_seat_bed:
+      Number(passenger.age) >= 6 || passenger.requires_seat_bed === true,
+  }));
+  const count = passengers.length;
   if (!count)
     throw Object.assign(new Error("At least one passenger is required"), {
       status: 400,
@@ -617,26 +629,43 @@ async function calculateQuote(body, connection = pool) {
   );
   if (!tour || !travel || !room)
     throw Object.assign(new Error("Invalid tour selection"), { status: 400 });
+  const allocationCount = passengers.filter(
+    (passenger) => passenger.requires_seat_bed,
+  ).length;
   const capacity = Math.max(1, Number(room.capacity || 1));
   const maxExtra = room.extra_bed_allowed
     ? Math.max(0, Number(room.max_extra_beds || 0))
     : 0;
   const units =
     room.charge_type === "PER_BED"
-      ? count
-      : Math.max(1, Math.ceil(count / (capacity + maxExtra)));
+      ? allocationCount
+      : allocationCount
+        ? Math.max(1, Math.ceil(allocationCount / (capacity + maxExtra)))
+        : 0;
   const extraBeds =
-    room.charge_type === "PER_BED" ? 0 : Math.max(0, count - units * capacity);
-  const food = count * Number(tour.food_charge_per_person);
+    room.charge_type === "PER_BED"
+      ? 0
+      : Math.max(0, allocationCount - units * capacity);
+  const food = passengers.reduce((sum, passenger) => {
+    const charge =
+      passenger.age <= 5
+        ? tour.food_charge_age_0_5
+        : passenger.age <= 12
+          ? tour.food_charge_age_6_12
+          : tour.food_charge_age_13_plus;
+    return sum + Number(charge ?? tour.food_charge_per_person ?? 0);
+  }, 0);
   const travelAmount =
     travel.charge_type === "PER_PERSON"
-      ? count * Number(travel.charge_amount)
+      ? allocationCount * Number(travel.charge_amount)
       : Number(travel.charge_amount);
   const accommodation =
     units * Number(room.charge_amount) +
     extraBeds * Number(room.extra_bed_charge || 0);
   return {
     passenger_count: count,
+    allocation_count: allocationCount,
+    passengers,
     food_amount: food,
     travel_amount: travelAmount,
     accommodation_amount: accommodation,
@@ -657,7 +686,7 @@ function busLetter(n) {
   return s;
 }
 async function allocateBus(c, registrationId, travel, count) {
-  if (travel.mode !== "BUS") return null;
+  if (travel.mode !== "BUS" || count <= 0) return null;
   await c.query("SELECT id FROM travel_options WHERE id=? FOR UPDATE", [
     travel.id,
   ]);
@@ -694,6 +723,7 @@ async function allocateRooms(
   people,
   extraBeds,
 ) {
+  if (people <= 0) return [];
   if (room.charge_type === "PER_BED") {
     const [inventory] = await c.query(
       "SELECT ri.*,COALESCE((SELECT SUM(rra.standard_beds_allocated+rra.extra_beds_allocated) FROM registration_room_allocations rra JOIN registrations r ON r.id=rra.registration_id WHERE rra.room_inventory_id=ri.id AND r.status<>'CANCELLED'),0) used FROM room_inventory ri WHERE ri.room_type_id=? AND ri.is_active=1 ORDER BY ri.id FOR UPDATE",
@@ -774,6 +804,21 @@ app.post(
       throw Object.assign(new Error("Enter a valid email address"), {
         status: 400,
       });
+    const paymentReceivers = [
+      "Birju Bhatt",
+      "Mahesh Savani",
+      "Mayur Satasiya",
+      "Parin Thakkar",
+    ];
+    if (!paymentReceivers.includes(req.body.payment_receiver))
+      throw Object.assign(new Error("Select who you will pay to"), {
+        status: 400,
+      });
+    if (req.body.terms_accepted !== true)
+      throw Object.assign(
+        new Error("Please accept the booking conditions before submitting"),
+        { status: 400 },
+      );
     req.body = {
       ...req.body,
       family_name: familyName,
@@ -807,7 +852,7 @@ app.post(
         );
       }
       const [r] = await c.query(
-        "INSERT INTO registrations(tour_id,family_name,contact_name,contact_phone,contact_email,travel_option_id,room_type_id,room_units,extra_beds,food_amount,travel_amount,accommodation_amount,total_amount,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'SUBMITTED')",
+        "INSERT INTO registrations(tour_id,family_name,contact_name,contact_phone,contact_email,travel_option_id,room_type_id,room_units,extra_beds,food_amount,travel_amount,accommodation_amount,total_amount,payment_receiver,terms_accepted,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'SUBMITTED')",
         [
           b.tour_id,
           b.family_name,
@@ -822,22 +867,29 @@ app.post(
           q.travel_amount,
           q.accommodation_amount,
           q.total_amount,
+          b.payment_receiver,
+          1,
         ],
       );
-      for (const p of b.passengers)
+      for (const p of q.passengers)
         await c.query(
-          "INSERT INTO passengers(registration_id,name,gender,age) VALUES(?,?,?,?)",
-          [r.insertId, p.name, p.gender, p.age],
+          "INSERT INTO passengers(registration_id,name,gender,age,requires_seat_bed) VALUES(?,?,?,?,?)",
+          [r.insertId, p.name, p.gender, p.age, p.requires_seat_bed ? 1 : 0],
         );
       const rooms = await allocateRooms(
         c,
         r.insertId,
         q.room,
         q.units,
-        q.passenger_count,
+        q.allocation_count,
         q.extraBeds,
       );
-      const bus = await allocateBus(c, r.insertId, q.travel, q.passenger_count);
+      const bus = await allocateBus(
+        c,
+        r.insertId,
+        q.travel,
+        q.allocation_count,
+      );
       return { id: r.insertId, rooms, bus };
     });
     const [[registration]] = await pool.query(
@@ -851,7 +903,7 @@ app.post(
     });
   }),
 );
-const reportQuery = `SELECT r.id,r.family_name,r.contact_name,r.contact_phone,r.room_units,r.extra_beds,r.food_amount,r.travel_amount,r.accommodation_amount,r.total_amount,r.amount_received,r.admin_comments,r.status,t.name tour_name,t.location,vo.name travel_mode,vo.mode travel_mode_type,rt.name room_type,COUNT(p.id) member_count,GROUP_CONCAT(CONCAT(p.name,' (',p.gender,', ',p.age,')') ORDER BY p.id SEPARATOR ', ') members,(SELECT GROUP_CONCAT(CONCAT(ri.room_number,' / Floor ',COALESCE(ri.floor_number,''),' (',rra.standard_beds_allocated+rra.extra_beds_allocated,' bed(s))') ORDER BY ri.id SEPARATOR ', ') FROM registration_room_allocations rra JOIN room_inventory ri ON ri.id=rra.room_inventory_id WHERE rra.registration_id=r.id) assigned_rooms,(SELECT GROUP_CONCAT(CONCAT(bi.bus_name,' (',rba.seats_allocated,' seats)') SEPARATOR ', ') FROM registration_bus_allocations rba JOIN bus_instances bi ON bi.id=rba.bus_instance_id WHERE rba.registration_id=r.id) assigned_bus FROM registrations r JOIN tours t ON t.id=r.tour_id JOIN travel_options vo ON vo.id=r.travel_option_id JOIN room_types rt ON rt.id=r.room_type_id JOIN passengers p ON p.registration_id=r.id WHERE r.tour_id=? GROUP BY r.id ORDER BY vo.name,r.family_name`;
+const reportQuery = `SELECT r.id,r.family_name,r.contact_name,r.contact_phone,r.room_units,r.extra_beds,r.food_amount,r.travel_amount,r.accommodation_amount,r.total_amount,r.payment_receiver,r.terms_accepted,r.amount_received,r.admin_comments,r.status,t.name tour_name,t.location,vo.name travel_mode,vo.mode travel_mode_type,rt.name room_type,COUNT(p.id) member_count,GROUP_CONCAT(CONCAT(p.name,' (',p.gender,', ',p.age,CASE WHEN p.age<=5 THEN CASE WHEN p.requires_seat_bed=1 THEN ', child seat/bed booked' ELSE ', no child seat/bed' END ELSE '' END,')') ORDER BY p.id SEPARATOR ', ') members,(SELECT GROUP_CONCAT(CONCAT(ri.room_number,' / Floor ',COALESCE(ri.floor_number,''),' (',rra.standard_beds_allocated+rra.extra_beds_allocated,' bed(s))') ORDER BY ri.id SEPARATOR ', ') FROM registration_room_allocations rra JOIN room_inventory ri ON ri.id=rra.room_inventory_id WHERE rra.registration_id=r.id) assigned_rooms,(SELECT GROUP_CONCAT(CONCAT(bi.bus_name,' (',rba.seats_allocated,' seats)') SEPARATOR ', ') FROM registration_bus_allocations rba JOIN bus_instances bi ON bi.id=rba.bus_instance_id WHERE rba.registration_id=r.id) assigned_bus FROM registrations r JOIN tours t ON t.id=r.tour_id JOIN travel_options vo ON vo.id=r.travel_option_id JOIN room_types rt ON rt.id=r.room_type_id JOIN passengers p ON p.registration_id=r.id WHERE r.tour_id=? GROUP BY r.id ORDER BY vo.name,r.family_name`;
 async function getReport(tourId, type) {
   const [rows] = await pool.query(reportQuery, [tourId]);
   if (type === "bus") return rows.filter((x) => x.travel_mode_type === "BUS");
@@ -943,6 +995,8 @@ app.get(
       "Travel Amount": x.travel_amount,
       "Accommodation Amount": x.accommodation_amount,
       "Family Total": x.total_amount,
+      "I Will Pay To": x.payment_receiver || "",
+      "Terms Accepted": x.terms_accepted ? "Yes" : "No",
       "Amount Received": x.amount_received ? "Yes" : "No",
       "Admin Comments": x.admin_comments || "",
     }));
