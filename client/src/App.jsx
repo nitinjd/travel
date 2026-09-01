@@ -702,6 +702,13 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                       setRoom(x.id);
                     }}
                   >
+                    {x.image && (
+                      <img
+                        className="roomOptionImage"
+                        src={x.image.url}
+                        alt={`${x.name} accommodation`}
+                      />
+                    )}
                     <span>{x.is_ac ? "AC" : "○"}</span>
                     <b>{x.name}</b>
                     <small>
@@ -1097,6 +1104,52 @@ function Admin({ tour, token, refresh }) {
     setMessageType("success");
     setMessage(`Image removed from ${item.title}`);
   };
+  const uploadRoomImage = async (room, file) => {
+    if (!file) return;
+    const url = `/api/admin/room-types/${room.id}/image`;
+    setSaving(url);
+    setMessage("");
+    try {
+      const body = new FormData();
+      body.append("image", file);
+      const response = await fetch(url, {
+        method: "POST",
+        headers,
+        body,
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok)
+        throw new Error(result.message || "Room image upload failed");
+      patchRow(setRooms, room.id, "image", result);
+      notify(`${room.name} image saved successfully`);
+    } catch (uploadError) {
+      notify(
+        uploadError.message.includes("room_type_images")
+          ? "Please execute database/08_room_type_images.sql, then upload the image again."
+          : `Could not upload ${room.name} image: ${uploadError.message}`,
+        "error",
+      );
+    } finally {
+      setSaving("");
+    }
+  };
+  const removeRoomImage = async (room) => {
+    const url = `/api/admin/room-types/${room.id}/image`;
+    setSaving(url);
+    setMessage("");
+    try {
+      await api(url, { method: "DELETE", headers });
+      patchRow(setRooms, room.id, "image", null);
+      notify(`${room.name} image removed`);
+    } catch (removeError) {
+      notify(
+        `Could not remove ${room.name} image: ${removeError.message}`,
+        "error",
+      );
+    } finally {
+      setSaving("");
+    }
+  };
   const notify = (value, type = "success") => {
     setMessageType(type);
     setMessage(value);
@@ -1442,6 +1495,40 @@ function Admin({ tour, token, refresh }) {
                 >
                   Delete
                 </button>
+              </div>
+              <div className="roomImageEditor">
+                <div className="roomImagePreview">
+                  {x.image ? (
+                    <img src={x.image.url} alt={`${x.name} room`} />
+                  ) : (
+                    <span>No room image uploaded</span>
+                  )}
+                </div>
+                <label className="roomImageUpload">
+                  <span>Room/bed image</span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    disabled={!!saving}
+                    onChange={(event) => {
+                      uploadRoomImage(x, event.target.files?.[0]);
+                      event.target.value = "";
+                    }}
+                  />
+                  <small>
+                    One image, maximum 5 MB. A new upload replaces it.
+                  </small>
+                </label>
+                {x.image && (
+                  <button
+                    type="button"
+                    className="danger"
+                    disabled={!!saving}
+                    onClick={() => removeRoomImage(x)}
+                  >
+                    Remove image
+                  </button>
+                )}
               </div>
               <RoomInventoryInline
                 room={x}
