@@ -2154,7 +2154,51 @@ function Admin({ tour, token, refresh, onBack }) {
         <div
           className={`card wide editor setupPage ${setupSection === "plan" ? "active" : ""}`}
         >
-          <h2>Travel plan</h2>
+          <div className="sectionHeaderRow">
+            <div>
+              <h2>Travel plan</h2>
+              <p className="sectionHint">Add and manage day-wise travel plan items for this tour.</p>
+            </div>
+            <button
+              type="button"
+              className="primary"
+              disabled={!!saving}
+              onClick={async () => {
+                const nextDay = plan.reduce((max, item) => Math.max(max, Number(item.day_number) || 0), 0) + 1;
+                const draft = {
+                  tour_id: tour.id,
+                  day_number: nextDay,
+                  title: `Day ${nextDay}`,
+                  location: "",
+                  google_maps_url: "",
+                  start_time: "09:00",
+                  end_time: "",
+                  notes: "",
+                };
+                setSaving("/api/admin/itinerary");
+                try {
+                  const created = await api("/api/admin/itinerary", {
+                    method: "POST",
+                    headers,
+                    body: JSON.stringify(draft),
+                  });
+                  setPlan((current) => [...current, { ...draft, id: created.id, images: [] }]);
+                  setMessageType("success");
+                  setMessage(`Travel plan item for Day ${nextDay} added`);
+                } catch (error) {
+                  setMessageType("error");
+                  setMessage(`Could not add travel plan item: ${error.message}`);
+                } finally {
+                  setSaving("");
+                }
+              }}
+            >
+              + Add travel plan
+            </button>
+          </div>
+          {plan.length === 0 && (
+            <div className="emptyState">No travel plan items yet. Click <b>Add travel plan</b> to create the first day.</div>
+          )}
           {plan.map((x) => (
             <div className="itineraryConfig" key={x.id}>
               <div className="editRow planEdit">

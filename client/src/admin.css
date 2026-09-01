@@ -902,3 +902,26 @@ html[data-theme="dark"] .tourList tr.selectedTour td { background:#172554; }
 .newTourActions { justify-content: flex-end; margin-top: 18px; }
 .headingActions button { display:inline-flex; align-items:center; gap:6px; }
 @media (max-width: 650px) { .newTourActions { flex-direction:column; align-items:stretch; } .newTourActions button { width:100%; } }
+
+.sectionHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.sectionHeaderRow h2 { margin-bottom: 2px; }
+.sectionHint { margin: 0; color: var(--muted); font-size: 13px; }
+.emptyState {
+  padding: 22px;
+  margin-bottom: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  text-align: center;
+  background: rgba(127, 127, 127, 0.04);
+}
+@media (max-width: 720px) {
+  .sectionHeaderRow { align-items: stretch; flex-direction: column; }
+  .sectionHeaderRow > button { width: 100%; }
+}
