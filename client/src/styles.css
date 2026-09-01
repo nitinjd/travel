@@ -44,20 +44,10 @@ header {
   place-items: center;
   font-weight: 900;
 }
-/* The header's second element is the trip summary. Keep it horizontal and readable. */
 header > div:nth-child(2) {
   display: flex;
-  align-items: center;
+  flex-direction: column;
 }
-.trip {
-  flex: 0 1 auto;
-  max-width: min(520px, 50vw);
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.trip svg { flex: 0 0 auto; }
 header small {
   opacity: 0.7;
 }
@@ -1130,13 +1120,7 @@ html[data-theme="dark"] .roomImagePreview { background:#0f172a; }
 @media (max-width: 900px) {
   header { padding:0 16px; gap:8px; }
   .brandText small { font-size:10px; }
-  .trip {
-    display:flex;
-    max-width: min(46vw, 420px);
-    padding:8px 11px;
-    gap:7px;
-    font-size:12px;
-  }
+  .trip { display:none; }
   .content { padding:24px 16px 48px; max-width:none; }
   .heading { flex-direction:column; gap:12px; margin-bottom:18px; }
   .headingActions { width:100%; }
@@ -1156,18 +1140,7 @@ html[data-theme="dark"] .roomImagePreview { background:#0f172a; }
   .receivedCell { text-align:left; }
 }
 @media (max-width: 600px) {
-  header { height:auto; min-height:64px; padding-top:8px; padding-bottom:8px; }
-  .trip {
-    order: 3;
-    width: 100%;
-    max-width: none;
-    justify-content: center;
-    white-space: normal;
-    overflow: visible;
-    text-overflow: clip;
-    flex-wrap: wrap;
-    border-radius: 12px;
-  }
+  header { height:64px; }
   .logo { width:38px; height:38px; }
   .headerActions { gap:6px; }
   .admin { padding:7px 9px; font-size:12px; }
@@ -1344,3 +1317,9 @@ html[data-theme="dark"] .configChecks > span { color: #c7d0dc; }
   .steps { width: calc(100vw - 16px); margin-left: -0px; }
   .reportTable td { grid-template-columns: 88px minmax(0, 1fr); font-size: 12px; }
 }
+
+
+.newTourForm { max-width: none; }
+.newTourActions { justify-content: flex-end; margin-top: 18px; }
+.headingActions button { display:inline-flex; align-items:center; gap:6px; }
+@media (max-width: 650px) { .newTourActions { flex-direction:column; align-items:stretch; } .newTourActions button { width:100%; } }
