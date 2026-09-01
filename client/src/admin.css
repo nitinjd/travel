@@ -214,6 +214,17 @@ button.danger {
   padding: 16px 18px;
   margin: 0;
 }
+.reportFilters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(170px, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 14px;
+  padding: 14px;
+}
+.reportFilters button {
+  min-height: 42px;
+}
 .publicMain {
   grid-template-columns: 1fr;
 }
@@ -571,6 +582,9 @@ button.danger {
   .inventoryGrid {
     grid-template-columns: 1fr;
   }
+  .reportFilters {
+    grid-template-columns: 1fr 1fr;
+  }
   .availability {
     grid-template-columns: 1fr 1fr;
   }
@@ -607,6 +621,9 @@ button.danger {
   }
   .availability,
   .previewDetails {
+    grid-template-columns: 1fr;
+  }
+  .reportFilters {
     grid-template-columns: 1fr;
   }
   .planDays {
