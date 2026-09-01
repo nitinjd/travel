@@ -74,6 +74,12 @@ main {
   grid-template-columns: 220px 1fr;
   min-height: calc(100vh - 74px);
 }
+.loginMain {
+  grid-template-columns: minmax(0, 1fr);
+}
+.loginMain .content {
+  max-width: none;
+}
 nav {
   background: white;
   border-right: 1px solid var(--line);
@@ -526,6 +532,7 @@ footer {
   margin: 15px 0 6px;
 }
 .login {
+  width: min(420px, 100%);
   max-width: 420px;
   margin: 60px auto;
 }
