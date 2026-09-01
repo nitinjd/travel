@@ -27,9 +27,10 @@ header {
   height: 74px;
   background: var(--dark);
   color: #fff;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   padding: 0 30px;
   position: sticky;
   top: 0;
@@ -53,6 +54,7 @@ header small {
 }
 
 .brandLink {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -69,7 +71,8 @@ header small {
   flex-direction: column;
 }
 .headerActions {
-  margin-left: auto;
+  margin-left: 0;
+  justify-self: end;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -91,7 +94,10 @@ header small {
 }
 
 .trip {
-  margin: auto;
+  margin: 0 auto;
+  min-width: 0;
+  max-width: min(62vw, 760px);
+  justify-self: center;
   display: flex;
   align-items: center;
   gap: 9px;
@@ -1307,7 +1313,28 @@ html[data-theme="dark"] .configChecks > span { color: #c7d0dc; }
   header { align-items: center; }
   .brandLink { flex: 1 1 auto; }
   .headerActions { flex: 0 0 auto; }
-  .admin { display: none; }
+  header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "brand actions"
+      "trip trip";
+    height: auto;
+    min-height: 64px;
+    padding: 10px 12px;
+    row-gap: 8px;
+  }
+  .brandLink { grid-area: brand; }
+  .headerActions { grid-area: actions; }
+  .trip {
+    grid-area: trip;
+    width: 100%;
+    max-width: none;
+    justify-self: stretch;
+    justify-content: center;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .admin { display: inline-flex; align-items: center; font-size: 10px; padding: 7px 8px; max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .headerLogout { font-size: 0; gap: 0; width: 36px; justify-content: center; padding: 0; }
   .content { padding-left: 8px; padding-right: 8px; }
   .card { padding: 12px; }
