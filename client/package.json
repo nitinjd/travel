@@ -9,7 +9,6 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
-    "jspdf": "^3.0.4",
     "lucide-react": "latest",
     "react": "latest",
     "react-dom": "latest",
