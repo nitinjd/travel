@@ -384,6 +384,14 @@ footer {
 .rooms button {
   flex-direction: column;
   align-items: flex-start;
+  overflow: hidden;
+}
+.roomOptionImage {
+  display: block;
+  width: calc(100% + 34px);
+  height: 155px;
+  margin: -17px -17px 3px;
+  object-fit: cover;
 }
 .rooms button > span {
   background: var(--dark);
