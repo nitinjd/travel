@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeft,
   Bus,
   CalendarDays,
   ChevronLeft,
@@ -15,6 +14,8 @@ import {
   Settings2,
   Users,
   Wallet,
+  Moon,
+  Sun,
 } from "lucide-react";
 const money = (n) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
 const formatDateTime = (value) => {
@@ -73,7 +74,7 @@ const BOOKING_CONDITIONS = [
   "Booking will be confirmed only after payment is received.",
   "If any change is required in the plan, accommodation or other arrangements, due diligence will be followed with guidance from the leaders.",
   "Cancellation and refund are not available after booking is confirmed.",
-  "For children aged 0–5, a bus seat or accommodation bed will not be provided unless it is booked exclusively for the child.",
+  "For children aged 0–5, bus seating and accommodation are optional and charged only when selected for the child.",
 ];
 const api = async (url, options = {}) => {
   try {
@@ -103,7 +104,12 @@ export default function App() {
     [tab, setTab] = useState("tours"),
     [editingRegistrationId, setEditingRegistrationId] = useState(null),
     [token, setToken] = useState(localStorage.getItem("tourToken")),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [darkMode, setDarkMode] = useState(() => localStorage.getItem("tourDarkMode") === "1");
+  useEffect(() => {
+    document.documentElement.dataset.theme = darkMode ? "dark" : "light";
+    localStorage.setItem("tourDarkMode", darkMode ? "1" : "0");
+  }, [darkMode]);
   useEffect(() => {
     api("/api/tours/active")
       .then(setTour)
@@ -145,19 +151,36 @@ export default function App() {
         </button>
         {displayTour && (
           <div className="trip" aria-label="Current tour">
-            <span><CalendarDays size={15} /> {displayTour.start_date} – {displayTour.end_date}</span>
-            <span><MapPin size={15} /> {displayTour.location}</span>
+            <span className="tripDate">
+              <CalendarDays size={16} />
+              {displayTour.start_date} – {displayTour.end_date}
+            </span>
+            <span className="tripLocation">
+              <MapPin size={16} />
+              {displayTour.location}
+            </span>
           </div>
         )}
-        {isAdminPage && token ? (
-          <div className="headerTools">
-            <div className="admin">Administrator</div>
-            <button type="button" className="headerLogout" onClick={logout}>
-              <LogOut size={16} />
-              Logout
-            </button>
-          </div>
-        ) : null}
+        <div className="headerActions">
+          <button
+            type="button"
+            className="themeToggle"
+            title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+            aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+            onClick={() => setDarkMode((value) => !value)}
+          >
+            {darkMode ? <Sun size={17} /> : <Moon size={17} />}
+          </button>
+          {isAdminPage && token && (
+            <>
+              <div className="admin">Administrator</div>
+              <button type="button" className="headerLogout" onClick={logout}>
+                <LogOut size={16} />
+                Logout
+              </button>
+            </>
+          )}
+        </div>
       </header>
       <main
         className={
@@ -166,10 +189,7 @@ export default function App() {
       >
         <section className="content">
           {error && (
-            <div className="alert appError">
-              <span>{error}</span>
-              <button onClick={() => window.location.reload()}>Retry</button>
-            </div>
+            <ErrorToast message={error} onRetry={() => window.location.reload()} onClose={() => setError("")} />
           )}
           {!isAdminPage ? (
             !tour ? (
@@ -191,6 +211,7 @@ export default function App() {
               selectedTourId={selectedAdminTour?.id}
               onSelect={(id) => loadAdminTour(id).then(() => setTab("admin"))}
               onReports={(id) => loadAdminTour(id).then(() => setTab("reports"))}
+              onNewTour={() => setTab("newTour")}
             />
           ) : tab === "admin" ? (
             adminTour ? (
@@ -199,10 +220,17 @@ export default function App() {
                 token={token}
                 refresh={() => loadAdminTour(adminTour.id)}
                 onBack={() => setTab("tours")}
+                onNewTour={() => setTab("newTour")}
               />
             ) : (
-              <TourList token={token} onSelect={(id) => loadAdminTour(id).then(() => setTab("admin"))} onReports={(id) => loadAdminTour(id).then(() => setTab("reports"))} />
+              <TourList token={token} onSelect={(id) => loadAdminTour(id).then(() => setTab("admin"))} onReports={(id) => loadAdminTour(id).then(() => setTab("reports"))} onNewTour={() => setTab("newTour")} />
             )
+          ) : tab === "newTour" ? (
+            <NewTour
+              token={token}
+              onCancel={() => setTab("tours")}
+              onCreated={(id) => loadAdminTour(id).then(() => setTab("admin"))}
+            />
           ) : tab === "registration" && editingRegistrationId ? (
             <Registration
               tour={adminTour}
@@ -352,7 +380,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
       contact_email: "",
     }),
     [people, setPeople] = useState([
-      { name: "", gender: "MALE", age: "", requires_seat_bed: false },
+      { name: "", gender: "MALE", age: "", requires_bus_seat: false, requires_accommodation: false },
     ]),
     [travel, setTravel] = useState(tour.travelOptions[0]?.id),
     [room, setRoom] = useState(tour.roomTypes[0]?.id),
@@ -364,7 +392,8 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
     [paymentReceiver, setPaymentReceiver] = useState(PAYMENT_RECEIVERS[0]),
     [termsAccepted, setTermsAccepted] = useState(false),
     [stepNotice, setStepNotice] = useState(""),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [fieldErrors, setFieldErrors] = useState({});
   useEffect(() => {
     if (!adminEditId) return;
     setLoadingEdit(true);
@@ -384,7 +413,8 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
           record.passengers.map((passenger) => ({
             ...passenger,
             age: String(passenger.age),
-            requires_seat_bed: !!passenger.requires_seat_bed,
+            requires_bus_seat: !!passenger.requires_bus_seat,
+            requires_accommodation: !!passenger.requires_accommodation,
           })),
         );
         setTravel(record.travel_option_id);
@@ -398,29 +428,36 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
   }, [adminEditId, token]);
   const travelItem = tour.travelOptions.find((x) => x.id === Number(travel)),
     roomItem = tour.roomTypes.find((x) => x.id === Number(room));
-  const allocationCount = useMemo(
+  const busSeatCount = useMemo(
+    () =>
+      people.filter(
+        (passenger) => Number(passenger.age) >= 6 || passenger.requires_bus_seat,
+      ).length,
+    [people],
+  );
+  const accommodationCount = useMemo(
     () =>
       people.filter(
         (passenger) =>
-          Number(passenger.age) >= 6 || passenger.requires_seat_bed,
+          Number(passenger.age) >= 6 || passenger.requires_accommodation,
       ).length,
     [people],
   );
   const availableRoomCapacity = (item) =>
     Number(item?.inventory?.remaining_capacity || 0) +
     (editRecord && Number(editRecord.room_type_id) === Number(item?.id)
-      ? Number(editRecord.allocation_count || 0)
+      ? Number(editRecord.accommodation_count ?? editRecord.allocation_count ?? 0)
       : 0);
   useEffect(() => {
-    if (availableRoomCapacity(roomItem) >= allocationCount) return;
+    if (availableRoomCapacity(roomItem) >= accommodationCount) return;
     const available = tour.roomTypes.find(
-      (item) => availableRoomCapacity(item) >= allocationCount,
+      (item) => availableRoomCapacity(item) >= accommodationCount,
     );
     if (available) setRoom(available.id);
-  }, [allocationCount, editRecord, room, roomItem, tour.roomTypes]);
+  }, [accommodationCount, editRecord, room, roomItem, tour.roomTypes]);
   const { units, extra } = useMemo(
-    () => calculateAccommodation(roomItem, allocationCount),
-    [roomItem, allocationCount],
+    () => calculateAccommodation(roomItem, accommodationCount),
+    [roomItem, accommodationCount],
   );
   const quote = useMemo(() => {
     const food = people.reduce(
@@ -429,58 +466,71 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
       ),
       tv =
         travelItem?.charge_type === "PER_PERSON"
-          ? allocationCount * travelItem.charge_amount
+          ? busSeatCount * travelItem.charge_amount
           : travelItem?.charge_amount || 0,
       stay =
         units * (roomItem?.charge_amount || 0) +
         extra * (roomItem?.extra_bed_charge || 0);
     return { food, tv, stay, total: food + tv + stay };
-  }, [people, allocationCount, travelItem, roomItem, units, extra, tour]);
+  }, [people, busSeatCount, travelItem, roomItem, units, extra, tour]);
   const update = (i, k, v) =>
     setPeople((p) => p.map((x, n) => (n === i ? { ...x, [k]: v } : x)));
+  const clearFieldError = (key) =>
+    setFieldErrors((current) => {
+      if (!current[key]) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  const validateStep1 = () => {
+    const next = {};
+    const phone = family.contact_phone.replace(/[^0-9+]/g, "");
+    if (!family.family_name.trim()) next.family_name = "Family / Group name is required";
+    if (!family.mandal) next.mandal = "Mandal is required";
+    if (!family.contact_name.trim()) next.contact_name = "Contact person is required";
+    if (!/^\+?[0-9]{7,15}$/.test(phone)) next.contact_phone = "Enter a valid mobile number";
+    if (family.contact_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(family.contact_email))
+      next.contact_email = "Enter a valid email address";
+    people.forEach((person, index) => {
+      if (!person.name.trim()) next[`people.${index}.name`] = `Passenger ${index + 1} name is required`;
+      if (!person.gender) next[`people.${index}.gender`] = `Passenger ${index + 1} gender is required`;
+      if (person.age === "" || Number(person.age) < 0 || Number(person.age) > 120)
+        next[`people.${index}.age`] = `Passenger ${index + 1} age must be between 0 and 120`;
+    });
+    return next;
+  };
   const advance = () => {
     setError("");
     setStepNotice("");
-    if (step === 1) {
-      const phone = family.contact_phone.replace(/[^0-9+]/g, "");
-      if (
-        !family.family_name.trim() ||
-        !family.mandal ||
-        !family.contact_name.trim() ||
-        !/^\+?[0-9]{7,15}$/.test(phone)
-      )
-        return setError(
-          "Select Mandal and enter family/group name, contact name and a valid mobile number",
-        );
-      if (
-        family.contact_email &&
-        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(family.contact_email)
-      )
-        return setError("Enter a valid email address");
-      if (
-        people.some(
-          (x) =>
-            !x.name.trim() ||
-            !x.age ||
-            Number(x.age) < 0 ||
-            Number(x.age) > 120,
-        )
-      )
-        return setError("Enter a valid name and age for every passenger");
+    let validation = {};
+    if (step === 1) validation = validateStep1();
+    if (step === 2 && !travel) validation.travel = "Select a transportation option";
+    if (step === 3) {
+      if (!room) validation.room = "Select an accommodation option";
+      else if (availableRoomCapacity(roomItem) < accommodationCount)
+        validation.room = `${roomItem?.name || "Selected accommodation"} does not have enough available capacity`;
     }
-    if (step === 3 && availableRoomCapacity(roomItem) < allocationCount)
-      return setError(
-        `${roomItem?.name || "Selected accommodation"} has no capacity for ${allocationCount} booked bed(s). Please select another option or ask the administrator to add room inventory.`,
-      );
+    setFieldErrors(validation);
+    if (Object.keys(validation).length) {
+      setError(`Please correct ${Object.keys(validation).length} field${Object.keys(validation).length === 1 ? "" : "s"} highlighted below.`);
+      return;
+    }
     const completed = ["Passenger details", "Transportation", "Accommodation"];
     setStepNotice(`${completed[step - 1]} saved. Continue to the next step.`);
     setStep(step + 1);
   };
   const submit = async () => {
+    if (!paymentReceiver) {
+      setFieldErrors({ paymentReceiver: "Select who you will pay to" });
+      setError("Please correct the highlighted field below.");
+      return;
+    }
     if (!termsAccepted) {
+      setFieldErrors({ terms: "Please accept the booking conditions before submitting" });
       setError("Please accept the booking conditions before submitting");
       return;
     }
+    setFieldErrors({});
     setBusy(true);
     setError("");
     try {
@@ -570,7 +620,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                 <th>Gender</th>
                 <th>Age</th>
                 <th>Food</th>
-                <th>Seat / bed</th>
+                <th>Child services</th>
               </tr>
             </thead>
             <tbody>
@@ -581,9 +631,15 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                   <td>{person.age}</td>
                   <td>{money(foodChargeForAge(tour, person.age))}</td>
                   <td>
-                    {Number(person.age) >= 6 || person.requires_seat_bed
-                      ? "Booked"
-                      : "Not booked"}
+                    {Number(person.age) >= 6 || person.requires_bus_seat
+                      ? "Bus booked"
+                      : "No bus"}
+                    {Number(person.age) <= 5 && " • "}
+                    {Number(person.age) >= 6 || person.requires_accommodation
+                      ? "Accommodation booked"
+                      : Number(person.age) <= 5
+                        ? "No accommodation"
+                        : "Accommodation booked"}
                   </td>
                 </tr>
               ))}
@@ -597,7 +653,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
             <p>
               <b>{travelItem?.name}</b>
             </p>
-            <p>{allocationCount} paid seat(s)</p>
+            <p>{busSeatCount} bus seat(s) booked</p>
             <p>Assigned bus: {submitted.assigned_bus || "Self travel"}</p>
           </div>
           <div className="confirmationSection">
@@ -681,7 +737,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
         ))}
       </div>
       <div className="card form">
-        {error && <div className="alert">{error}</div>}
+        {error && <ErrorToast message={error} onClose={() => setError("")} />}
         {stepNotice && (
           <div className="notice formNotice" role="status" aria-live="polite">
             <b>✓</b> {stepNotice}
@@ -700,15 +756,15 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                 <Field
                   label="Family / Group name"
                   value={family.family_name}
-                  onChange={(v) => setFamily({ ...family, family_name: v })}
+                  error={fieldErrors.family_name}
+                  onChange={(v) => { setFamily({ ...family, family_name: v }); clearFieldError("family_name"); }}
                 />
                 <label>
                   Mandal
                   <select
                     value={family.mandal}
-                    onChange={(event) =>
-                      setFamily({ ...family, mandal: event.target.value })
-                    }
+                    className={fieldErrors.mandal ? "fieldInvalid" : ""}
+                    onChange={(event) => { setFamily({ ...family, mandal: event.target.value }); clearFieldError("mandal"); }}
                   >
                     <option value="">Select Mandal</option>
                     {MANDALS.map((mandal) => (
@@ -717,42 +773,59 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                       </option>
                     ))}
                   </select>
+                  {fieldErrors.mandal && <small className="fieldError">{fieldErrors.mandal}</small>}
                 </label>
               </div>
               <Field
                 label="Contact person"
                 value={family.contact_name}
-                onChange={(v) => setFamily({ ...family, contact_name: v })}
+                error={fieldErrors.contact_name}
+                onChange={(v) => { setFamily({ ...family, contact_name: v }); clearFieldError("contact_name"); }}
               />
               <Field
                 label="Mobile number"
                 value={family.contact_phone}
-                onChange={(v) => setFamily({ ...family, contact_phone: v })}
+                error={fieldErrors.contact_phone}
+                onChange={(v) => { setFamily({ ...family, contact_phone: v }); clearFieldError("contact_phone"); }}
               />
               <Field
                 label="Email (optional)"
                 value={family.contact_email}
-                onChange={(v) => setFamily({ ...family, contact_email: v })}
+                error={fieldErrors.contact_email}
+                onChange={(v) => { setFamily({ ...family, contact_email: v }); clearFieldError("contact_email"); }}
               />
             </div>
             {people.map((p, i) => (
               <div className="passengerEntry" key={i}>
                 <div className="passenger">
-                  <input
-                    placeholder={`Passenger ${i + 1} name`}
-                    value={p.name}
-                    onChange={(e) => update(i, "name", e.target.value)}
-                  />
+                  <label className="passengerField">
+                    <span>Passenger {i + 1} name</span>
+                    <input
+                      className={fieldErrors[`people.${i}.name`] ? "fieldInvalid" : ""}
+                      placeholder={`Passenger ${i + 1} name`}
+                      value={p.name}
+                      onChange={(e) => { update(i, "name", e.target.value); clearFieldError(`people.${i}.name`); }}
+                    />
+                    {fieldErrors[`people.${i}.name`] && <small className="fieldError">{fieldErrors[`people.${i}.name`]}</small>}
+                  </label>
+                  <label className="passengerField">
+                    <span>Gender</span>
                   <select
+                    className={fieldErrors[`people.${i}.gender`] ? "fieldInvalid" : ""}
                     value={p.gender}
-                    onChange={(e) => update(i, "gender", e.target.value)}
+                    onChange={(e) => { update(i, "gender", e.target.value); clearFieldError(`people.${i}.gender`); }}
                   >
                     <option value="MALE">Male</option>
                     <option value="FEMALE">Female</option>
                     <option value="OTHER">Other</option>
                   </select>
+                  {fieldErrors[`people.${i}.gender`] && <small className="fieldError">{fieldErrors[`people.${i}.gender`]}</small>}
+                  </label>
+                  <label className="passengerField">
+                    <span>Age</span>
                   <input
                     type="number"
+                    className={fieldErrors[`people.${i}.age`] ? "fieldInvalid" : ""}
                     placeholder="Age"
                     value={p.age}
                     onChange={(e) => {
@@ -763,35 +836,56 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                             ? {
                                 ...item,
                                 age,
-                                requires_seat_bed:
+                                requires_bus_seat:
                                   Number(age) >= 6
                                     ? true
                                     : Number(item.age) >= 6
                                       ? false
-                                      : item.requires_seat_bed,
+                                      : item.requires_bus_seat,
+                                requires_accommodation:
+                                  Number(age) >= 6
+                                    ? true
+                                    : Number(item.age) >= 6
+                                      ? false
+                                      : item.requires_accommodation,
                               }
                             : item,
                         ),
                       );
+                      clearFieldError(`people.${i}.age`);
                     }}
                   />
+                  {fieldErrors[`people.${i}.age`] && <small className="fieldError">{fieldErrors[`people.${i}.age`]}</small>}
+                  </label>
                 </div>
                 <div className="passengerPricing">
                   <span>
                     Food charge: {money(foodChargeForAge(tour, p.age))}
                   </span>
                   {p.age !== "" && Number(p.age) <= 5 && (
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={!!p.requires_seat_bed}
-                        onChange={(e) =>
-                          update(i, "requires_seat_bed", e.target.checked)
-                        }
-                      />
-                      Book an exclusive bus seat and accommodation bed for this
-                      child at the regular charges
-                    </label>
+                    <div className="childServiceOptions">
+                      <span>Child options (age 0–5):</span>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={!!p.requires_bus_seat}
+                          onChange={(e) =>
+                            update(i, "requires_bus_seat", e.target.checked)
+                          }
+                        />
+                        Bus seat ({travelItem?.mode === "SELF" ? "no charge for self travel" : money(travelItem?.charge_amount || 0)})
+                      </label>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={!!p.requires_accommodation}
+                          onChange={(e) =>
+                            update(i, "requires_accommodation", e.target.checked)
+                          }
+                        />
+                        Accommodation bed / room
+                      </label>
+                    </div>
                   )}
                   {people.length > 1 && (
                     <button
@@ -818,7 +912,8 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                     name: "",
                     gender: "MALE",
                     age: "",
-                    requires_seat_bed: false,
+                    requires_bus_seat: false,
+                    requires_accommodation: false,
                   },
                 ])
               }
@@ -833,15 +928,16 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
             <Title
               icon={<Bus />}
               title="Transportation"
-              sub={`Select one mode • ${allocationCount} paid seat(s) for ${people.length} passenger(s)`}
+              sub={`Select one mode • ${busSeatCount} bus seat(s) for ${people.length} passenger(s)`}
               cost={money(quote.tv)}
             />
+            {fieldErrors.travel && <div className="sectionFieldError">{fieldErrors.travel}</div>}
             <div className="options">
               {tour.travelOptions.map((x) => (
                 <button
                   key={x.id}
                   className={Number(travel) === x.id ? "selected" : ""}
-                  onClick={() => setTravel(x.id)}
+                  onClick={() => { setTravel(x.id); clearFieldError("travel"); }}
                 >
                   <Bus />
                   <span>
@@ -855,7 +951,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                   <strong>
                     {x.mode === "SELF"
                       ? "₹0"
-                      : money(x.charge_amount * allocationCount)}
+                      : money(x.charge_amount * busSeatCount)}
                   </strong>
                 </button>
               ))}
@@ -871,10 +967,11 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
               sub="Select rooms or beds for the complete tour"
               cost={money(quote.stay)}
             />
+            {fieldErrors.room && <div className="sectionFieldError">{fieldErrors.room}</div>}
             <div className="rooms">
               {tour.roomTypes.map((x) => {
                 const remaining = availableRoomCapacity(x);
-                const available = remaining >= allocationCount;
+                const available = remaining >= accommodationCount;
                 return (
                   <button
                     key={x.id}
@@ -882,6 +979,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                     className={`${Number(room) === x.id ? "selected" : ""} ${!available ? "unavailable" : ""}`}
                     onClick={() => {
                       setError("");
+                      clearFieldError("room");
                       setRoom(x.id);
                     }}
                   >
@@ -913,7 +1011,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                     {x.description && <small>{x.description}</small>}
                     {!available && (
                       <small className="soldOut">
-                        Unavailable for {allocationCount} booked bed(s) — no
+                        Unavailable for {accommodationCount} booked bed(s) — no
                         beds/rooms remain
                       </small>
                     )}
@@ -923,7 +1021,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
             </div>
             <div className="automaticAllocation" role="status">
               <b>
-                Automatically calculated: {allocationCount} paid bed(s) for{" "}
+                Automatically calculated: {accommodationCount} paid bed(s) for{" "}
                 {people.length} passenger(s)
               </b>
               <span>
@@ -968,10 +1066,8 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                     {index + 1}. {person.name} — {person.gender} — Age{" "}
                     {person.age}
                     {Number(person.age) <= 5
-                      ? person.requires_seat_bed
-                        ? " — exclusive seat/bed booked"
-                        : " — no seat/bed booked"
-                      : ""}
+                      ? ` — bus: ${person.requires_bus_seat ? "yes" : "no"} • accommodation: ${person.requires_accommodation ? "yes" : "no"}`
+                      : " — bus: yes • accommodation: yes"}
                   </p>
                 ))}
               </div>
@@ -980,7 +1076,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                 <p>
                   {travelItem?.name}
                   {travelItem?.mode === "BUS"
-                    ? ` • ${allocationCount} seats required`
+                    ? ` • ${busSeatCount} seats required`
                     : ""}
                 </p>
               </div>
@@ -1004,26 +1100,35 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
               </div>
             </div>
             <div className="paymentCommitment">
-              <label>
-                I will pay to
+              <label className={fieldErrors.paymentReceiver ? "hasFieldError" : ""}>
+                <span>I will pay to</span>
                 <select
+                  className={fieldErrors.paymentReceiver ? "fieldInvalid" : ""}
                   value={paymentReceiver}
-                  onChange={(e) => setPaymentReceiver(e.target.value)}
+                  aria-invalid={!!fieldErrors.paymentReceiver}
+                  onChange={(e) => { setPaymentReceiver(e.target.value); clearFieldError("paymentReceiver"); }}
                 >
                   {PAYMENT_RECEIVERS.map((person) => (
                     <option key={person}>{person}</option>
                   ))}
                 </select>
+                {fieldErrors.paymentReceiver && <small className="fieldError">{fieldErrors.paymentReceiver}</small>}
               </label>
             </div>
             <BookingConditions />
-            <label className="termsAcceptance">
+            <label className={`termsAcceptance ${fieldErrors.terms ? "hasFieldError" : ""}`}>
               <input
                 type="checkbox"
+                className={fieldErrors.terms ? "fieldInvalid" : ""}
                 checked={termsAccepted}
-                onChange={(e) => setTermsAccepted(e.target.checked)}
+                onChange={(e) => {
+                  setTermsAccepted(e.target.checked);
+                  clearFieldError("terms");
+                  if (e.target.checked) setError("");
+                }}
               />
-              I have read and accept all booking conditions.
+              <span>I have read and accept all booking conditions.</span>
+              {fieldErrors.terms && <small className="fieldError">{fieldErrors.terms}</small>}
             </label>
           </>
         )}
@@ -1188,7 +1293,7 @@ function Login({ onLogin }) {
     <div className="card login">
       <LogIn />
       <h2>Administrator login</h2>
-      {error && <div className="alert">{error}</div>}
+      {error && <ErrorToast message={error} onClose={() => setError("")} />}
       <Field label="Email" value={email} onChange={setEmail} />
       <label>
         Password
@@ -1204,7 +1309,7 @@ function Login({ onLogin }) {
     </div>
   );
 }
-function TourList({ token, selectedTourId, onSelect, onReports }) {
+function TourList({ token, selectedTourId, onSelect, onReports, onNewTour }) {
   const [tours, setTours] = useState([]),
     [loading, setLoading] = useState(true),
     [opening, setOpening] = useState(null),
@@ -1246,8 +1351,14 @@ function TourList({ token, selectedTourId, onSelect, onReports }) {
         tag="Administrator"
         title="Tours"
         text="Select a tour to open and manage its complete setup."
+        action={
+          <button type="button" className="primary" onClick={onNewTour}>
+            <Plus size={16} />
+            Add new tour
+          </button>
+        }
       />
-      {error && <div className="alert">{error}</div>}
+      {error && <ErrorToast message={error} onClose={() => setError("")} />}
       <div className="card table tourList">
         {loading ? (
           <p className="tourListMessage">Loading tours…</p>
@@ -1283,25 +1394,23 @@ function TourList({ token, selectedTourId, onSelect, onReports }) {
                     </span>
                   </td>
                   <td>
-                    <div className="tourActions">
-                      <button
-                        type="button"
-                        className="primary"
-                        disabled={opening !== null}
-                        onClick={() => open(item.id)}
-                      >
-                        {opening === item.id ? "Opening…" : "Open setup"}
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary reportTourButton"
-                        disabled={opening !== null}
-                        onClick={() => openReports(item.id)}
-                      >
-                        <Download size={15} />
-                        Reports
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={opening !== null}
+                      onClick={() => open(item.id)}
+                    >
+                      {opening === item.id ? "Opening…" : "Open setup"}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary reportTourButton"
+                      disabled={opening !== null}
+                      onClick={() => openReports(item.id)}
+                    >
+                      <Download size={15} />
+                      Reports
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -1312,7 +1421,71 @@ function TourList({ token, selectedTourId, onSelect, onReports }) {
     </>
   );
 }
-function Admin({ tour, token, refresh, onBack }) {
+function NewTour({ token, onCancel, onCreated }) {
+  const [form, setForm] = useState({
+    name: "",
+    location: "",
+    start_date: "",
+    end_date: "",
+    food_charge_age_0_5: 0,
+    food_charge_age_6_12: 300,
+    food_charge_age_13_plus: 1000,
+    estimated_misc_expense: 0,
+    status: "DRAFT",
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+  const submit = async (event) => {
+    event.preventDefault();
+    setError("");
+    if (!form.name.trim()) return setError("Tour name is required");
+    if (!form.location.trim()) return setError("Location is required");
+    if (!form.start_date || !form.end_date) return setError("Start and end dates are required");
+    if (form.end_date < form.start_date) return setError("End date cannot be before start date");
+    setSaving(true);
+    try {
+      const created = await api("/api/admin/tours", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      onCreated(created.id);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <>
+      <Heading
+        tag="Administrator"
+        title="Add new tour"
+        text="Create the tour first, then configure travel, rooms and the complete tour plan."
+        action={<button type="button" className="secondary" onClick={onCancel}><ChevronLeft size={17} /> Tour list</button>}
+      />
+      {error && <ErrorToast message={error} onClose={() => setError("")} />}
+      <form className="card editor newTourForm" onSubmit={submit}>
+        <div className="grid2">
+          <Field label="Tour name" value={form.name} onChange={(v) => update("name", v)} />
+          <Field label="Location" value={form.location} onChange={(v) => update("location", v)} />
+          <Field label="Start date" type="date" value={form.start_date} onChange={(v) => update("start_date", v)} />
+          <Field label="End date" type="date" value={form.end_date} onChange={(v) => update("end_date", v)} />
+          <Field label="Food charge — age 0–5 (₹)" type="number" value={form.food_charge_age_0_5} onChange={(v) => update("food_charge_age_0_5", Number(v || 0))} />
+          <Field label="Food charge — age 6–12 (₹)" type="number" value={form.food_charge_age_6_12} onChange={(v) => update("food_charge_age_6_12", Number(v || 0))} />
+          <Field label="Food charge — age 13+ (₹)" type="number" value={form.food_charge_age_13_plus} onChange={(v) => update("food_charge_age_13_plus", Number(v || 0))} />
+          <Field label="Estimated misc. expense (₹)" type="number" value={form.estimated_misc_expense} onChange={(v) => update("estimated_misc_expense", Number(v || 0))} />
+        </div>
+        <div className="configActions newTourActions">
+          <button type="button" className="secondary" onClick={onCancel}>Cancel</button>
+          <button type="submit" className="primary" disabled={saving}>{saving ? "Creating…" : "Create tour & open setup"}</button>
+        </div>
+      </form>
+    </>
+  );
+}
+function Admin({ tour, token, refresh, onBack, onNewTour }) {
   const [setupSection, setSetupSection] = useState("tour"),
     [t, setT] = useState({ ...tour }),
     [travels, setTravels] = useState(tour.travelOptions),
@@ -1492,9 +1665,13 @@ function Admin({ tour, token, refresh, onBack }) {
         text="Configure tour, travel, accommodation and day-wise itinerary."
         action={
           <div className="headingActions">
-            <button type="button" className="secondary backButton" onClick={onBack}>
-              <ArrowLeft size={16} />
+            <button type="button" className="secondary" onClick={onBack}>
+              <ChevronLeft size={17} />
               Tour list
+            </button>
+            <button type="button" className="secondary" onClick={onNewTour}>
+              <Plus size={17} />
+              Add new tour
             </button>
             {setupSection === "tour" && (
               <button
@@ -1535,7 +1712,7 @@ function Admin({ tour, token, refresh, onBack }) {
       </div>
       {message && (
         <div
-          className={messageType === "error" ? "alert" : "notice"}
+          className={messageType === "error" ? "alert appError floatingError" : "notice"}
           role="status"
           aria-live="polite"
         >
@@ -1987,7 +2164,51 @@ function Admin({ tour, token, refresh, onBack }) {
         <div
           className={`card wide editor setupPage ${setupSection === "plan" ? "active" : ""}`}
         >
-          <h2>Travel plan</h2>
+          <div className="sectionHeaderRow">
+            <div>
+              <h2>Travel plan</h2>
+              <p className="sectionHint">Add and manage day-wise travel plan items for this tour.</p>
+            </div>
+            <button
+              type="button"
+              className="primary"
+              disabled={!!saving}
+              onClick={async () => {
+                const nextDay = plan.reduce((max, item) => Math.max(max, Number(item.day_number) || 0), 0) + 1;
+                const draft = {
+                  tour_id: tour.id,
+                  day_number: nextDay,
+                  title: `Day ${nextDay}`,
+                  location: "",
+                  google_maps_url: "",
+                  start_time: "09:00",
+                  end_time: "",
+                  notes: "",
+                };
+                setSaving("/api/admin/itinerary");
+                try {
+                  const created = await api("/api/admin/itinerary", {
+                    method: "POST",
+                    headers,
+                    body: JSON.stringify(draft),
+                  });
+                  setPlan((current) => [...current, { ...draft, id: created.id, images: [] }]);
+                  setMessageType("success");
+                  setMessage(`Travel plan item for Day ${nextDay} added`);
+                } catch (error) {
+                  setMessageType("error");
+                  setMessage(`Could not add travel plan item: ${error.message}`);
+                } finally {
+                  setSaving("");
+                }
+              }}
+            >
+              + Add travel plan
+            </button>
+          </div>
+          {plan.length === 0 && (
+            <div className="emptyState">No travel plan items yet. Click <b>Add travel plan</b> to create the first day.</div>
+          )}
           {plan.map((x) => (
             <div className="itineraryConfig" key={x.id}>
               <div className="editRow planEdit">
@@ -2443,17 +2664,17 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
         action={
           <div className="headingActions">
             <button type="button" className="secondary backButton" onClick={onBack}>
-              <ArrowLeft size={16} />
+              <ChevronLeft size={17} />
               Tour list
             </button>
             <button className="primary" onClick={download}>
-              <Download size={16} />
+              <Download size={17} />
               Download Excel
             </button>
           </div>
         }
       />
-      {error && <div className="alert">{error}</div>}
+      {error && <ErrorToast message={error} onClose={() => setError("")} />}
       <div className="stats">
         <Stat label="Families" value={rows.length} />
         <Stat
@@ -2622,6 +2843,8 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
                 "Family",
                 "Mandal",
                 "Members",
+                "Bus seats",
+                "Accommodation",
                 "Travel mode",
                 "Assigned bus",
                 "Room type",
@@ -2634,18 +2857,14 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
               ].map((x) => (
                 <th key={x}>{x}</th>
               ))}
-              {type === "overall" && (
-                <>
-                  <th>Amount received</th>
-                  <th>Comments</th>
-                </>
-              )}
+              <th>Amount received</th>
+              <th>Comments</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((x) => (
               <tr key={x.id}>
-                <td>
+                <td data-label="Family">
                   <b>{x.family_name}</b>
                   <button
                     type="button"
@@ -2656,22 +2875,22 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
                   </button>
                   <small>{x.members}</small>
                 </td>
-                <td>{x.mandal}</td>
-                <td>{x.member_count}</td>
-                <td>{x.travel_mode}</td>
-                <td>{x.assigned_bus || "Self"}</td>
-                <td>{x.room_type}</td>
-                <td className="blank">{x.assigned_rooms}</td>
-                <td>{money(x.food_amount)}</td>
-                <td>{money(x.travel_amount)}</td>
-                <td>{money(x.accommodation_amount)}</td>
-                <td>
+                <td data-label="Mandal">{x.mandal}</td>
+                <td data-label="Members">{x.member_count}</td>
+                <td data-label="Bus seats">{x.bus_seat_count ?? "—"}</td>
+                <td data-label="Accommodation">{x.accommodation_count ?? "—"}</td>
+                <td data-label="Travel mode">{x.travel_mode}</td>
+                <td data-label="Assigned bus">{x.assigned_bus || "Self"}</td>
+                <td data-label="Room type">{x.room_type}</td>
+                <td data-label="Assigned room / floor" className="blank">{x.assigned_rooms}</td>
+                <td data-label="Food">{money(x.food_amount)}</td>
+                <td data-label="Travel ₹">{money(x.travel_amount)}</td>
+                <td data-label="Stay">{money(x.accommodation_amount)}</td>
+                <td data-label="Total">
                   <b>{money(x.total_amount)}</b>
                 </td>
-                <td>{x.payment_receiver || "—"}</td>
-                {type === "overall" && (
-                  <>
-                    <td className="receivedCell">
+                <td data-label="I will pay to">{x.payment_receiver || "—"}</td>
+                <td data-label="Amount received" className="receivedCell">
                       <input
                         aria-label={`Amount received for ${x.family_name}`}
                         type="checkbox"
@@ -2684,8 +2903,8 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
                           )
                         }
                       />
-                    </td>
-                    <td className="commentCell">
+                </td>
+                <td data-label="Comments" className="commentCell">
                       <textarea
                         aria-label={`Comments for ${x.family_name}`}
                         value={x.admin_comments || ""}
@@ -2699,9 +2918,7 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
                         }
                         onBlur={() => savePaymentNote(x)}
                       />
-                    </td>
-                  </>
-                )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -2710,16 +2927,31 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
     </>
   );
 }
-function Field({ label, value, onChange, type = "text" }) {
+function Field({ label, value, onChange, type = "text", error }) {
   return (
-    <label>
-      {label}
+    <label className={error ? "hasFieldError" : ""}>
+      <span>{label}</span>
       <input
+        className={error ? "fieldInvalid" : ""}
         type={type}
         value={value ?? ""}
+        aria-invalid={!!error}
         onChange={(e) => onChange(e.target.value)}
       />
+      {error && <small className="fieldError">{error}</small>}
     </label>
+  );
+}
+function ErrorToast({ message, onClose, onRetry }) {
+  if (!message) return null;
+  return (
+    <div className="alert appError floatingError" role="alert" aria-live="assertive">
+      <span>{message}</span>
+      <div className="errorActions">
+        {onRetry && <button type="button" onClick={onRetry}>Retry</button>}
+        {onClose && <button type="button" className="errorClose" onClick={onClose} aria-label="Dismiss error">×</button>}
+      </div>
+    </div>
   );
 }
 function ConfigField({ label, children, className = "" }) {
