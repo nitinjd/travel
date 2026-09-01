@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bus,
   CalendarDays,
@@ -16,6 +16,19 @@ import {
   Wallet,
 } from "lucide-react";
 const money = (n) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
+const formatDateTime = (value) => {
+  if (!value) return "—";
+  const normalized = String(value).includes("T")
+    ? String(value)
+    : `${String(value).replace(" ", "T")}Z`;
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Kolkata",
+  }).format(date);
+};
 const PAYMENT_RECEIVERS = [
   "Birju Bhatt",
   "Mahesh Savani",
@@ -278,24 +291,6 @@ function BookingConditions({ compact = false }) {
     </div>
   );
 }
-async function downloadRegistrationPdf(element, registrationId) {
-  if (!element) return;
-  const { jsPDF } = await import("jspdf");
-  const pdf = new jsPDF({ unit: "mm", format: "a4" });
-  await pdf.html(element, {
-    margin: [8, 8, 8, 8],
-    autoPaging: "text",
-    width: 194,
-    windowWidth: 900,
-    html2canvas: {
-      backgroundColor: "#ffffff",
-      scale: 0.82,
-      useCORS: true,
-      ignoreElements: (node) => node.classList?.contains("noPrint"),
-    },
-  });
-  pdf.save(`TourSetu-registration-${registrationId}.pdf`);
-}
 function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
   const [step, setStep] = useState(1),
     [family, setFamily] = useState({
@@ -312,14 +307,12 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
     [submitted, setSubmitted] = useState(null),
     [showPlan, setShowPlan] = useState(false),
     [busy, setBusy] = useState(false),
-    [pdfBusy, setPdfBusy] = useState(false),
     [loadingEdit, setLoadingEdit] = useState(!!adminEditId),
     [editRecord, setEditRecord] = useState(null),
     [paymentReceiver, setPaymentReceiver] = useState(PAYMENT_RECEIVERS[0]),
     [termsAccepted, setTermsAccepted] = useState(false),
     [stepNotice, setStepNotice] = useState(""),
     [error, setError] = useState("");
-  const confirmationRef = useRef(null);
   useEffect(() => {
     if (!adminEditId) return;
     setLoadingEdit(true);
@@ -470,7 +463,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
     return <div className="card">Loading family registration…</div>;
   if (submitted)
     return (
-      <div className="card success confirmation" ref={confirmationRef}>
+      <div className="card success confirmation">
         <div className="confirmationHeading">
           <i>✓</i>
           <h2>
@@ -494,6 +487,14 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
           />
           <Summary label="Family / Group" value={family.family_name} />
           <Summary label="Members" value={people.length} />
+          <Summary
+            label={adminEditId ? "Last saved" : "Submitted on"}
+            value={formatDateTime(
+              adminEditId
+                ? submitted.updated_at || submitted.created_at
+                : submitted.created_at,
+            )}
+          />
         </div>
 
         <div className="confirmationSection">
@@ -572,25 +573,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
         <BookingConditions />
 
         <div className="confirmationActions noPrint">
-          <button
-            className="primary"
-            disabled={pdfBusy}
-            onClick={async () => {
-              setPdfBusy(true);
-              try {
-                await downloadRegistrationPdf(
-                  confirmationRef.current,
-                  submitted.id,
-                );
-              } finally {
-                setPdfBusy(false);
-              }
-            }}
-          >
-            <Download />
-            {pdfBusy ? "Preparing PDF…" : "Download PDF"}
-          </button>
-          <button className="secondary" onClick={() => window.print()}>
+          <button className="primary" onClick={() => window.print()}>
             <Printer />
             Print / Save as PDF
           </button>
