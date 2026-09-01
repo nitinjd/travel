@@ -277,6 +277,95 @@ function BookingConditions({ compact = false }) {
     </div>
   );
 }
+async function downloadRegistrationPdf({
+  tour,
+  family,
+  people,
+  travelItem,
+  roomItem,
+  allocationCount,
+  units,
+  extra,
+  quote,
+  paymentReceiver,
+  submitted,
+}) {
+  const { jsPDF } = await import("jspdf");
+  const pdf = new jsPDF({ unit: "mm", format: "a4" });
+  const left = 16,
+    width = 178;
+  let y = 18;
+  const add = (text, { size = 10, bold = false, gap = 2 } = {}) => {
+    pdf.setFont("helvetica", bold ? "bold" : "normal");
+    pdf.setFontSize(size);
+    const lines = pdf.splitTextToSize(String(text ?? ""), width);
+    const height = lines.length * (size * 0.42 + 1);
+    if (y + height > 282) {
+      pdf.addPage();
+      y = 18;
+    }
+    pdf.text(lines, left, y);
+    y += height + gap;
+  };
+  const amount = (value) => `Rs. ${Number(value || 0).toLocaleString("en-IN")}`;
+  const assignedRooms = Array.isArray(submitted.assigned_rooms)
+    ? submitted.assigned_rooms.join(", ")
+    : submitted.assigned_rooms || "To be assigned";
+
+  add("TourSetu - Registration Confirmation", { size: 18, bold: true });
+  add(`Registration #${submitted.id}`, { size: 11, bold: true, gap: 5 });
+  add(`Tour: ${tour.name}`, { bold: true });
+  add(`Location: ${tour.location}`);
+  add(`Dates: ${tour.start_date} to ${tour.end_date}`, { gap: 5 });
+
+  add("Family and contact", { size: 13, bold: true });
+  add(`Family / Group: ${family.family_name}`);
+  add(`Contact person: ${family.contact_name}`);
+  add(`Mobile: ${family.contact_phone}`);
+  add(`Email: ${family.contact_email || "Not provided"}`, { gap: 5 });
+
+  add("Passengers", { size: 13, bold: true });
+  people.forEach((person, index) =>
+    add(
+      `${index + 1}. ${person.name} | ${person.gender} | Age ${person.age} | Food ${amount(foodChargeForAge(tour, person.age))}${Number(person.age) <= 5 ? (person.requires_seat_bed ? " | Exclusive seat/bed booked" : " | No seat/bed booked") : ""}`,
+    ),
+  );
+  add(`Total passengers: ${people.length}`, { gap: 5 });
+
+  add("Travel", { size: 13, bold: true });
+  add(`Mode: ${travelItem?.name || ""}`);
+  add(`Paid seats: ${allocationCount}`);
+  add(`Assigned bus: ${submitted.assigned_bus || "Self travel"}`);
+  add(`Travel amount: ${amount(quote.tv)}`, { gap: 5 });
+
+  add("Accommodation", { size: 13, bold: true });
+  add(`Room type: ${roomItem?.name || ""}`);
+  add(
+    `${roomItem?.charge_type === "PER_BED" ? "Beds" : "Rooms"}: ${units}${extra ? ` | Additional beds: ${extra}` : ""}`,
+  );
+  add(`Assigned room(s): ${assignedRooms}`);
+  add(`Accommodation amount: ${amount(quote.stay)}`, { gap: 5 });
+
+  add("Payment summary", { size: 13, bold: true });
+  add(`Food: ${amount(quote.food)}`);
+  add(`Travel: ${amount(quote.tv)}`);
+  add(`Accommodation: ${amount(quote.stay)}`);
+  add(`Total payable: ${amount(submitted.total_amount)}`, {
+    size: 12,
+    bold: true,
+  });
+  add(`I will pay to: ${paymentReceiver}`, { gap: 5 });
+
+  add("Booking conditions", { size: 13, bold: true });
+  BOOKING_CONDITIONS.forEach((condition, index) =>
+    add(`${index + 1}. ${condition}`),
+  );
+  add("Booking is pending until payment is confirmed.", {
+    bold: true,
+    gap: 0,
+  });
+  pdf.save(`TourSetu-registration-${submitted.id}.pdf`);
+}
 function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
   const [step, setStep] = useState(1),
     [family, setFamily] = useState({
@@ -449,31 +538,135 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
     return <div className="card">Loading family registration…</div>;
   if (submitted)
     return (
-      <div className="card success">
-        <i>✓</i>
-        <h2>
-          {adminEditId ? "Registration updated" : "Registration submitted"}
-        </h2>
-        <p>
-          <b>
-            {adminEditId
-              ? "All changes and inventory allocations were saved."
-              : "Booking pending payment confirmation."}
-          </b>
-        </p>
-        <p>
-          Family total: <b>{money(submitted.total_amount)}</b>
-        </p>
-        <p>
-          {submitted.assigned_bus && <b>{submitted.assigned_bus} • </b>}
-          Rooms: <b>{submitted.assigned_rooms?.join(", ")}</b>
-        </p>
-        <small>Registration #{submitted.id}</small>
-        {adminEditId && (
-          <button className="primary" onClick={onAdminDone}>
-            Back to reports
+      <div className="card success confirmation">
+        <div className="confirmationHeading">
+          <i>✓</i>
+          <h2>
+            {adminEditId ? "Registration updated" : "Registration submitted"}
+          </h2>
+          <p>
+            <b>
+              {adminEditId
+                ? "All changes and inventory allocations were saved."
+                : "Booking pending payment confirmation."}
+            </b>
+          </p>
+          <small>Registration #{submitted.id}</small>
+        </div>
+
+        <div className="confirmationSummary">
+          <Summary label="Tour" value={tour.name} />
+          <Summary
+            label="Dates"
+            value={`${tour.start_date} – ${tour.end_date}`}
+          />
+          <Summary label="Family / Group" value={family.family_name} />
+          <Summary label="Members" value={people.length} />
+        </div>
+
+        <div className="confirmationSection">
+          <h3>Contact details</h3>
+          <p>
+            <b>{family.contact_name}</b> • {family.contact_phone}
+            {family.contact_email ? ` • ${family.contact_email}` : ""}
+          </p>
+        </div>
+
+        <div className="confirmationSection table confirmationPassengers">
+          <h3>Passenger details</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Gender</th>
+                <th>Age</th>
+                <th>Food</th>
+                <th>Seat / bed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {people.map((person, index) => (
+                <tr key={`${person.name}-${index}`}>
+                  <td>{person.name}</td>
+                  <td>{person.gender}</td>
+                  <td>{person.age}</td>
+                  <td>{money(foodChargeForAge(tour, person.age))}</td>
+                  <td>
+                    {Number(person.age) >= 6 || person.requires_seat_bed
+                      ? "Booked"
+                      : "Not booked"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="confirmationColumns">
+          <div className="confirmationSection">
+            <h3>Transportation</h3>
+            <p>
+              <b>{travelItem?.name}</b>
+            </p>
+            <p>{allocationCount} paid seat(s)</p>
+            <p>Assigned bus: {submitted.assigned_bus || "Self travel"}</p>
+          </div>
+          <div className="confirmationSection">
+            <h3>Accommodation</h3>
+            <p>
+              <b>{roomItem?.name}</b>
+            </p>
+            <p>
+              {units}{" "}
+              {roomItem?.charge_type === "PER_BED" ? "bed(s)" : "room(s)"}
+              {extra ? ` + ${extra} additional bed(s)` : ""}
+            </p>
+            <p>Assigned: {submitted.assigned_rooms?.join(", ") || "Pending"}</p>
+          </div>
+        </div>
+
+        <div className="bill confirmationBill">
+          <Row label="Food" value={quote.food} />
+          <Row label="Travel" value={quote.tv} />
+          <Row label="Accommodation" value={quote.stay} />
+          <div>
+            <b>Total payable</b>
+            <strong>{money(submitted.total_amount)}</strong>
+          </div>
+        </div>
+        <div className="confirmationPayee">
+          I will pay to: <b>{paymentReceiver}</b>
+        </div>
+        <BookingConditions />
+
+        <div className="confirmationActions">
+          <button
+            className="primary"
+            onClick={() =>
+              downloadRegistrationPdf({
+                tour,
+                family,
+                people,
+                travelItem,
+                roomItem,
+                allocationCount,
+                units,
+                extra,
+                quote,
+                paymentReceiver,
+                submitted,
+              })
+            }
+          >
+            <Download />
+            Download PDF
           </button>
-        )}
+          {adminEditId && (
+            <button className="secondary" onClick={onAdminDone}>
+              Back to reports
+            </button>
+          )}
+        </div>
       </div>
     );
   return (
