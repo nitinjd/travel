@@ -35,6 +35,39 @@ const PAYMENT_RECEIVERS = [
   "Mayur Satasiya",
   "Parin Thakkar",
 ];
+const MANDALS = [
+  "Ambegaon",
+  "Bal Mandal",
+  "Balajinagar",
+  "Balewadi",
+  "Balika Mandal",
+  "Dattanagar",
+  "Dhayari",
+  "Hadapsar",
+  "Hinjawadi",
+  "Hinjewadi",
+  "Kalyani Nagar",
+  "Karvenagar",
+  "Kondhwa",
+  "Kothrud",
+  "Lohegaon",
+  "Mandai (Peth)",
+  "Market Yard",
+  "Nigdi",
+  "Pune Hindi",
+  "Pune Mandir",
+  "Pune Rural",
+  "Rajasthani",
+  "Sangvi",
+  "Shivane",
+  "Sinhagad",
+  "Talegaon",
+  "Tathawade",
+  "Thadwade",
+  "Wagholi",
+  "Wakad",
+  "Others",
+];
 const BOOKING_CONDITIONS = [
   "Booking will be confirmed only after payment is received.",
   "If any change is required in the plan, accommodation or other arrangements, due diligence will be followed with guidance from the leaders.",
@@ -295,6 +328,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
   const [step, setStep] = useState(1),
     [family, setFamily] = useState({
       family_name: "",
+      mandal: "",
       contact_name: "",
       contact_phone: "",
       contact_email: "",
@@ -323,6 +357,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
         setEditRecord(record);
         setFamily({
           family_name: record.family_name || "",
+          mandal: record.mandal || "Others",
           contact_name: record.contact_name || "",
           contact_phone: record.contact_phone || "",
           contact_email: record.contact_email || "",
@@ -392,11 +427,12 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
       const phone = family.contact_phone.replace(/[^0-9+]/g, "");
       if (
         !family.family_name.trim() ||
+        !family.mandal ||
         !family.contact_name.trim() ||
         !/^\+?[0-9]{7,15}$/.test(phone)
       )
         return setError(
-          "Enter family/group name, contact name and a valid mobile number",
+          "Select Mandal and enter family/group name, contact name and a valid mobile number",
         );
       if (
         family.contact_email &&
@@ -486,6 +522,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
             value={`${tour.start_date} – ${tour.end_date}`}
           />
           <Summary label="Family / Group" value={family.family_name} />
+          <Summary label="Mandal" value={family.mandal} />
           <Summary label="Members" value={people.length} />
           <Summary
             label={adminEditId ? "Last saved" : "Submitted on"}
@@ -640,11 +677,29 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
               cost={money(quote.food)}
             />
             <div className="grid2">
-              <Field
-                label="Family / Group name"
-                value={family.family_name}
-                onChange={(v) => setFamily({ ...family, family_name: v })}
-              />
+              <div className="familyMandalFields">
+                <Field
+                  label="Family / Group name"
+                  value={family.family_name}
+                  onChange={(v) => setFamily({ ...family, family_name: v })}
+                />
+                <label>
+                  Mandal
+                  <select
+                    value={family.mandal}
+                    onChange={(event) =>
+                      setFamily({ ...family, mandal: event.target.value })
+                    }
+                  >
+                    <option value="">Select Mandal</option>
+                    {MANDALS.map((mandal) => (
+                      <option key={mandal} value={mandal}>
+                        {mandal}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
               <Field
                 label="Contact person"
                 value={family.contact_name}
@@ -871,6 +926,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
             />
             <div className="summary">
               <Summary label="Family" value={family.family_name} />
+              <Summary label="Mandal" value={family.mandal} />
               <Summary label="Members" value={people.length} />
               <Summary label="Travel" value={travelItem?.name} />
               <Summary
@@ -2137,6 +2193,7 @@ function Reports({ tour, token, onEditRegistration }) {
   const [type, setType] = useState("overall"),
     [busFilter, setBusFilter] = useState(""),
     [roomFilter, setRoomFilter] = useState(""),
+    [mandalFilter, setMandalFilter] = useState(""),
     [receiverFilter, setReceiverFilter] = useState(""),
     [rows, setRows] = useState([]),
     [inventory, setInventory] = useState({ rooms: [], buses: [] }),
@@ -2145,9 +2202,10 @@ function Reports({ tour, token, onEditRegistration }) {
     const params = new URLSearchParams({ type });
     if (busFilter) params.set("bus_id", busFilter);
     if (roomFilter) params.set("room_type_id", roomFilter);
+    if (mandalFilter) params.set("mandal", mandalFilter);
     if (receiverFilter) params.set("payment_receiver", receiverFilter);
     return params.toString();
-  }, [busFilter, receiverFilter, roomFilter, type]);
+  }, [busFilter, mandalFilter, receiverFilter, roomFilter, type]);
   const collectionByReceiver = useMemo(() => {
     const totals = new Map(
       PAYMENT_RECEIVERS.map((name) => [
@@ -2366,11 +2424,25 @@ function Reports({ tour, token, onEditRegistration }) {
             ))}
           </select>
         </ConfigField>
+        <ConfigField label="Mandal">
+          <select
+            value={mandalFilter}
+            onChange={(event) => setMandalFilter(event.target.value)}
+          >
+            <option value="">All Mandals</option>
+            {MANDALS.map((mandal) => (
+              <option key={mandal} value={mandal}>
+                {mandal}
+              </option>
+            ))}
+          </select>
+        </ConfigField>
         <button
           type="button"
           onClick={() => {
             setBusFilter("");
             setRoomFilter("");
+            setMandalFilter("");
             setReceiverFilter("");
           }}
         >
@@ -2383,6 +2455,7 @@ function Reports({ tour, token, onEditRegistration }) {
             <tr>
               {[
                 "Family",
+                "Mandal",
                 "Members",
                 "Travel mode",
                 "Assigned bus",
@@ -2418,6 +2491,7 @@ function Reports({ tour, token, onEditRegistration }) {
                   </button>
                   <small>{x.members}</small>
                 </td>
+                <td>{x.mandal}</td>
                 <td>{x.member_count}</td>
                 <td>{x.travel_mode}</td>
                 <td>{x.assigned_bus || "Self"}</td>
