@@ -1,6 +1,46 @@
 .editor h2 {
   margin-bottom: 14px;
 }
+.setupSubmenu {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: 9px;
+  margin-bottom: 18px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: white;
+  box-shadow: 0 6px 20px rgba(23, 37, 84, 0.07);
+}
+.setupSubmenu button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 45px;
+  border: 0;
+  border-radius: 9px;
+  color: #526079;
+  background: transparent;
+}
+.setupSubmenu button:hover {
+  background: #f4f6fb;
+}
+.setupSubmenu button.active {
+  color: white;
+  background: var(--green);
+  font-weight: 750;
+}
+.setupSubmenu svg {
+  width: 18px;
+}
+.setupPage {
+  display: none;
+}
+.setupPage.active {
+  display: block;
+  grid-column: 1 / -1;
+}
 .configCard {
   display: grid;
   gap: 12px;
@@ -638,6 +678,9 @@ button.danger {
   }
 }
 @media (max-width: 850px) {
+  .setupSubmenu {
+    grid-template-columns: 1fr 1fr;
+  }
   .travelConfig,
   .roomConfig {
     grid-template-columns: 1fr 1fr;
@@ -671,6 +714,9 @@ button.danger {
   }
 }
 @media (max-width: 550px) {
+  .setupSubmenu {
+    grid-template-columns: 1fr;
+  }
   .travelConfig,
   .roomConfig {
     grid-template-columns: 1fr;
