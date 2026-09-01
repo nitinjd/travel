@@ -484,6 +484,36 @@ button.danger {
   background: var(--dark);
   color: white;
 }
+.roomInventoryInline {
+  grid-column: 1 / -1;
+  padding-top: 14px;
+  margin-top: 4px;
+  border-top: 1px solid var(--line);
+}
+.roomInventoryInline h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+.roomInventoryInline .inventoryStatus {
+  margin-bottom: 10px;
+}
+.inlineInventoryBuilder {
+  display: grid;
+  grid-template-columns: 0.7fr 0.8fr 1.1fr 0.8fr auto;
+  gap: 8px;
+  align-items: end;
+}
+.inlineInventoryBuilder input {
+  min-width: 0;
+}
+.inlineInventoryBuilder > button {
+  height: 42px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 13px;
+  color: white;
+  background: var(--dark);
+}
 .sharedHint {
   display: block;
   margin-top: 10px;
@@ -522,6 +552,7 @@ button.danger {
 @media (max-width: 1100px) {
   .travelConfig,
   .roomConfig,
+  .inlineInventoryBuilder,
   .busInventoryRow,
   .addBus {
     grid-template-columns: 1fr 1fr;
@@ -546,6 +577,9 @@ button.danger {
   .inventoryBuilder {
     grid-template-columns: 1fr 1fr;
   }
+  .inlineInventoryBuilder {
+    grid-template-columns: 1fr 1fr;
+  }
   .busInventoryRow,
   .addBus {
     grid-template-columns: 1fr 1fr;
@@ -562,6 +596,9 @@ button.danger {
     grid-template-columns: 1fr;
   }
   .inventoryBuilder {
+    grid-template-columns: 1fr;
+  }
+  .inlineInventoryBuilder {
     grid-template-columns: 1fr;
   }
   .busInventoryRow,
