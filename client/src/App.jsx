@@ -1214,7 +1214,8 @@ function Login({ onLogin }) {
   );
 }
 function Admin({ tour, token, refresh }) {
-  const [t, setT] = useState({ ...tour }),
+  const [setupSection, setSetupSection] = useState("tour"),
+    [t, setT] = useState({ ...tour }),
     [travels, setTravels] = useState(tour.travelOptions),
     [rooms, setRooms] = useState(tour.roomTypes),
     [newRoom, setNewRoom] = useState({
@@ -1391,17 +1392,42 @@ function Admin({ tour, token, refresh }) {
         title="Trip master setup"
         text="Configure tour, travel, accommodation and day-wise itinerary."
         action={
-          <button
-            className="primary"
-            disabled={!!saving}
-            onClick={() => save(`/api/admin/tours/${tour.id}`, t, "Tour")}
-          >
-            {saving === `/api/admin/tours/${tour.id}`
-              ? "Saving tour…"
-              : "Save tour"}
-          </button>
+          setupSection === "tour" ? (
+            <button
+              className="primary"
+              disabled={!!saving}
+              onClick={() => save(`/api/admin/tours/${tour.id}`, t, "Tour")}
+            >
+              {saving === `/api/admin/tours/${tour.id}`
+                ? "Saving tour…"
+                : "Save tour"}
+            </button>
+          ) : null
         }
       />
+      <div className="setupSubmenu" role="tablist" aria-label="Trip setup">
+        {[
+          { id: "tour", label: "Tour details", icon: <Settings2 /> },
+          { id: "travel", label: "Travel options", icon: <Bus /> },
+          { id: "rooms", label: "Room types", icon: <Hotel /> },
+          { id: "plan", label: "Travel plan", icon: <CalendarDays /> },
+        ].map((section) => (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={setupSection === section.id}
+            className={setupSection === section.id ? "active" : ""}
+            key={section.id}
+            onClick={() => {
+              setSetupSection(section.id);
+              setMessage("");
+            }}
+          >
+            {section.icon}
+            {section.label}
+          </button>
+        ))}
+      </div>
       {message && (
         <div
           className={messageType === "error" ? "alert" : "notice"}
@@ -1412,8 +1438,10 @@ function Admin({ tour, token, refresh }) {
           {message}
         </div>
       )}
-      <div className="adminGrid">
-        <div className="card">
+      <div className="adminGrid setupPageGrid">
+        <div
+          className={`card setupPage ${setupSection === "tour" ? "active" : ""}`}
+        >
           <h2>Tour details</h2>
           <Field
             label="Tour name"
@@ -1479,7 +1507,9 @@ function Admin({ tour, token, refresh }) {
             </div>
           </div>
         </div>
-        <div className="card editor">
+        <div
+          className={`card editor setupPage ${setupSection === "travel" ? "active" : ""}`}
+        >
           <h2>Travel options</h2>
           {travels.map((x) => (
             <div className="configCard travelConfig" key={x.id}>
@@ -1558,7 +1588,9 @@ function Admin({ tour, token, refresh }) {
             onSaved={notify}
           />
         </div>
-        <div className="card editor">
+        <div
+          className={`card editor setupPage ${setupSection === "rooms" ? "active" : ""}`}
+        >
           <h2>Room types</h2>
           {rooms.map((x) => (
             <div className="configCard roomConfig" key={x.id}>
@@ -1847,7 +1879,9 @@ function Admin({ tour, token, refresh }) {
             </button>
           </div>
         </div>
-        <div className="card wide editor">
+        <div
+          className={`card wide editor setupPage ${setupSection === "plan" ? "active" : ""}`}
+        >
           <h2>Travel plan</h2>
           {plan.map((x) => (
             <div className="itineraryConfig" key={x.id}>
