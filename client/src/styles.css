@@ -1002,3 +1002,164 @@ button:focus-visible {
   margin: 0;
   font-weight: 600;
 }
+
+
+/* Validation, floating errors, theme and responsive refinements */
+.headingActions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.floatingError {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 1000;
+  width: min(520px, calc(100vw - 32px));
+  margin: 0;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.22);
+  border: 1px solid #efb1ab;
+  animation: errorFloatIn 180ms ease-out;
+}
+.errorActions { display:flex; align-items:center; gap:6px; flex:0 0 auto; }
+.errorClose { background: transparent !important; color: inherit !important; font-size: 20px; line-height: 1; padding: 2px 5px !important; }
+@keyframes errorFloatIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+.hasFieldError > input,
+.hasFieldError > select,
+.passengerField > .fieldInvalid,
+.fieldInvalid { border-color: #d92d20 !important; box-shadow: 0 0 0 2px rgba(217,45,32,.10); }
+.fieldError { display:block; margin-top:4px; color:#b42318; font-size:11px; font-weight:700; }
+.sectionFieldError { margin: -4px 0 10px; padding:9px 12px; border-radius:8px; background:#fff0ed; color:#b42318; font-size:12px; font-weight:700; }
+.passengerField { display:flex; flex-direction:column; gap:5px; min-width:0; }
+.passengerField > span { font-size:10px; font-weight:750; color:var(--muted); }
+.termsAcceptance { display:grid !important; grid-template-columns:auto 1fr; align-items:start; gap:8px; }
+.termsAcceptance .fieldError { grid-column:2; }
+.receivedCell { text-align:center; vertical-align:middle; }
+.receivedCell input { width:18px; height:18px; accent-color:var(--green); }
+.commentCell textarea { width:100%; min-width:0; min-height:42px; resize:vertical; }
+.reportTable th:nth-child(1), .reportTable td:nth-child(1) { width:12%; }
+.reportTable th:nth-child(2), .reportTable td:nth-child(2) { width:7%; }
+.reportTable th:nth-child(3), .reportTable td:nth-child(3) { width:4.5%; }
+.reportTable th:nth-child(4), .reportTable td:nth-child(4) { width:5%; }
+.reportTable th:nth-child(5), .reportTable td:nth-child(5) { width:7%; }
+.reportTable th:nth-child(6), .reportTable td:nth-child(6) { width:7%; }
+.reportTable th:nth-child(7), .reportTable td:nth-child(7) { width:7%; }
+.reportTable th:nth-child(8), .reportTable td:nth-child(8) { width:7%; }
+.reportTable th:nth-child(9), .reportTable td:nth-child(9) { width:8%; }
+.reportTable th:nth-child(10), .reportTable td:nth-child(10) { width:5%; }
+.reportTable th:nth-child(11), .reportTable td:nth-child(11) { width:5%; }
+.reportTable th:nth-child(12), .reportTable td:nth-child(12) { width:5%; }
+.reportTable th:nth-child(13), .reportTable td:nth-child(13) { width:5.5%; }
+.reportTable th:nth-child(14), .reportTable td:nth-child(14) { width:7%; }
+.reportTable th:nth-child(15), .reportTable td:nth-child(15) { width:4.5%; }
+.reportTable th:nth-child(16), .reportTable td:nth-child(16) { width:8%; }
+.table { min-width:0; }
+.card { min-width:0; }
+
+:root {
+  --page-bg:#f4f6fb;
+  --surface:#ffffff;
+  --surface-2:#f8f9fc;
+  --surface-3:#eef1f6;
+  --text:#172033;
+  --muted-2:#475467;
+  --input:#ffffff;
+}
+html { background:var(--page-bg); }
+body { background:var(--page-bg); color:var(--text); transition:background .18s ease,color .18s ease; }
+.themeToggle {
+  width:38px; height:38px; border:1px solid #ffffff33; border-radius:50%;
+  display:grid; place-items:center; color:#fff; background:#ffffff12; cursor:pointer;
+}
+.themeToggle:hover { background:#ffffff20; }
+
+html[data-theme="dark"] body,
+html[data-theme="dark"] main { background:#0b1220; color:#e5e7eb; }
+html[data-theme="dark"] header { background:#0f1b3d; }
+html[data-theme="dark"] .content { color:#e5e7eb; }
+html[data-theme="dark"] .card,
+html[data-theme="dark"] .setupSubmenu,
+html[data-theme="dark"] .login { background:#111827; border-color:#263244; color:#e5e7eb; }
+html[data-theme="dark"] .heading p,
+html[data-theme="dark"] .title p,
+html[data-theme="dark"] .stats small,
+html[data-theme="dark"] td small,
+html[data-theme="dark"] .tourListMessage,
+html[data-theme="dark"] .configField > span,
+html[data-theme="dark"] .configChecks > span,
+html[data-theme="dark"] .passengerField > span { color:#9ca3af; }
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea { background:#0f172a; color:#e5e7eb; border-color:#334155; }
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder { color:#64748b; }
+html[data-theme="dark"] th { background:#1f2937; color:#9ca3af; }
+html[data-theme="dark"] th,
+html[data-theme="dark"] td { border-color:#263244; }
+html[data-theme="dark"] .filters button,
+html[data-theme="dark"] .secondary,
+html[data-theme="dark"] .setupSubmenu button { background:#172033; color:#cbd5e1; border-color:#334155; }
+html[data-theme="dark"] .filters button.active,
+html[data-theme="dark"] .setupSubmenu button.active { background:#2563eb; color:#fff; }
+html[data-theme="dark"] .notice,
+html[data-theme="dark"] .inventoryStatus,
+html[data-theme="dark"] .summarySaved { background:#172554; border-color:#31446e; color:#dbeafe; }
+html[data-theme="dark"] .alert,
+html[data-theme="dark"] .sectionFieldError { background:#3a1715; color:#fecaca; border-color:#74332e; }
+html[data-theme="dark"] .roomConfig,
+html[data-theme="dark"] .travelConfig,
+html[data-theme="dark"] .configCard { background:#1a2333; border-color:#334155; }
+html[data-theme="dark"] .roomInventoryInline,
+html[data-theme="dark"] .itineraryConfig { background:#141d2a; border-color:#334155; }
+html[data-theme="dark"] .newRoomType,
+html[data-theme="dark"] .addBus { background:#1c1a12; }
+html[data-theme="dark"] .tourList tr.selectedTour td { background:#172554; }
+html[data-theme="dark"] .tourStatus { background:#1f2937; color:#cbd5e1; }
+html[data-theme="dark"] .tourStatus.active { background:#172554; color:#93c5fd; }
+html[data-theme="dark"] .tourStatus.closed { background:#3a1715; color:#fecaca; }
+html[data-theme="dark"] .bookingConditions { background:#141d2a; border-color:#334155; }
+html[data-theme="dark"] .roomOptionImage,
+html[data-theme="dark"] .roomImagePreview { background:#0f172a; }
+
+@media (max-width: 900px) {
+  header { padding:0 16px; gap:8px; }
+  .brandText small { font-size:10px; }
+  .trip { display:none; }
+  .content { padding:24px 16px 48px; max-width:none; }
+  .heading { flex-direction:column; gap:12px; margin-bottom:18px; }
+  .headingActions { width:100%; }
+  .headingActions > button { flex:1; }
+  .stats { grid-template-columns:repeat(2,1fr); }
+  .reportFilters { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .tourList td:last-child { width:auto; }
+  .tourList td:last-child .primary,
+  .tourList td:last-child .secondary { margin:2px 4px 2px 0; }
+  .reportTableWrap { overflow:visible; }
+  .reportTable thead { display:none; }
+  .reportTable, .reportTable tbody, .reportTable tr, .reportTable td { display:block; width:100% !important; }
+  .reportTable tr { margin-bottom:12px; padding:8px 10px; border:1px solid var(--line); border-radius:10px; background:var(--surface); }
+  .reportTable td { display:grid; grid-template-columns:120px minmax(0,1fr); gap:10px; align-items:start; padding:7px 0; border-bottom:1px dashed var(--line); }
+  .reportTable td:last-child { border-bottom:0; }
+  .reportTable td::before { content:attr(data-label); font-size:10px; text-transform:uppercase; letter-spacing:.05em; font-weight:800; color:var(--muted); }
+  .receivedCell { text-align:left; }
+}
+@media (max-width: 600px) {
+  header { height:64px; }
+  .logo { width:38px; height:38px; }
+  .headerActions { gap:6px; }
+  .admin { padding:7px 9px; font-size:12px; }
+  .headerLogout { height:36px; padding:0 9px; }
+  .themeToggle { width:36px; height:36px; }
+  .content { padding:18px 12px 40px; }
+  .heading h1 { font-size:25px; }
+  .stats,
+  .reportFilters,
+  .grid2,
+  .grid3,
+  .timeline,
+  .summary,
+  .previewDetails,
+  .receiverCollectionGrid { grid-template-columns:1fr; }
+  .filters { overflow:auto; }
+  .filters button { flex:0 0 auto; }
+  .reportTable td { grid-template-columns:100px minmax(0,1fr); font-size:12px; }
+  .floatingError { right:12px; bottom:12px; width:calc(100vw - 24px); }
+}
+
+@media (max-width: 550px) { .passengerField:first-child { grid-column: 1 / -1; } .headerActions { margin-left:auto; } .brandText b { font-size:14px; } }

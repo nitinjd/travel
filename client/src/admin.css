@@ -859,3 +859,19 @@ button.danger {
 .inlineInventoryBuilder {
   grid-template-columns: 0.7fr 0.9fr 1.1fr 0.8fr auto;
 }
+
+
+/* Keep report actions visible and mobile-friendly */
+.reportTableWrap { overflow:visible; }
+.reportTable { table-layout:fixed; }
+.reportTable .receivedCell { width:auto; min-width:0; }
+.reportTable .commentCell { width:auto; min-width:0; }
+.reportTable .commentCell textarea { box-sizing:border-box; }
+@media (max-width: 900px) {
+  .setupSubmenu { width:100%; }
+  .roomImageEditor { grid-template-columns:1fr; }
+  .planImages { flex-wrap:wrap; }
+  .inventoryStatus { align-items:flex-start; }
+}
+html[data-theme="dark"] .reportTable tr { background:#111827; }
+html[data-theme="dark"] .tourList tr.selectedTour td { background:#172554; }

@@ -14,6 +14,8 @@ import {
   Settings2,
   Users,
   Wallet,
+  Moon,
+  Sun,
 } from "lucide-react";
 const money = (n) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
 const formatDateTime = (value) => {
@@ -102,7 +104,12 @@ export default function App() {
     [tab, setTab] = useState("tours"),
     [editingRegistrationId, setEditingRegistrationId] = useState(null),
     [token, setToken] = useState(localStorage.getItem("tourToken")),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [darkMode, setDarkMode] = useState(() => localStorage.getItem("tourDarkMode") === "1");
+  useEffect(() => {
+    document.documentElement.dataset.theme = darkMode ? "dark" : "light";
+    localStorage.setItem("tourDarkMode", darkMode ? "1" : "0");
+  }, [darkMode]);
   useEffect(() => {
     api("/api/tours/active")
       .then(setTour)
@@ -150,28 +157,35 @@ export default function App() {
             {displayTour.location}
           </div>
         )}
-        {isAdminPage && token && <div className="admin">Administrator</div>}
+        <div className="headerActions">
+          <button
+            type="button"
+            className="themeToggle"
+            title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+            aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+            onClick={() => setDarkMode((value) => !value)}
+          >
+            {darkMode ? <Sun size={17} /> : <Moon size={17} />}
+          </button>
+          {isAdminPage && token && (
+            <>
+              <div className="admin">Administrator</div>
+              <button type="button" className="headerLogout" onClick={logout}>
+                <LogOut size={16} />
+                Logout
+              </button>
+            </>
+          )}
+        </div>
       </header>
       <main
         className={
           !isAdminPage ? "publicMain" : !token ? "loginMain" : "adminMain"
         }
       >
-        {isAdminPage && token && (
-          <div className="headerActions">
-            <div className="admin">Administrator</div>
-            <button type="button" className="headerLogout" onClick={logout}>
-              <LogOut size={16} />
-              Logout
-            </button>
-          </div>
-        )}
         <section className="content">
           {error && (
-            <div className="alert appError">
-              <span>{error}</span>
-              <button onClick={() => window.location.reload()}>Retry</button>
-            </div>
+            <ErrorToast message={error} onRetry={() => window.location.reload()} onClose={() => setError("")} />
           )}
           {!isAdminPage ? (
             !tour ? (
@@ -200,6 +214,7 @@ export default function App() {
                 tour={adminTour}
                 token={token}
                 refresh={() => loadAdminTour(adminTour.id)}
+                onBack={() => setTab("tours")}
               />
             ) : (
               <TourList token={token} onSelect={(id) => loadAdminTour(id).then(() => setTab("admin"))} onReports={(id) => loadAdminTour(id).then(() => setTab("reports"))} />
@@ -364,7 +379,8 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
     [paymentReceiver, setPaymentReceiver] = useState(PAYMENT_RECEIVERS[0]),
     [termsAccepted, setTermsAccepted] = useState(false),
     [stepNotice, setStepNotice] = useState(""),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [fieldErrors, setFieldErrors] = useState({});
   useEffect(() => {
     if (!adminEditId) return;
     setLoadingEdit(true);
@@ -446,49 +462,62 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
   }, [people, busSeatCount, travelItem, roomItem, units, extra, tour]);
   const update = (i, k, v) =>
     setPeople((p) => p.map((x, n) => (n === i ? { ...x, [k]: v } : x)));
+  const clearFieldError = (key) =>
+    setFieldErrors((current) => {
+      if (!current[key]) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  const validateStep1 = () => {
+    const next = {};
+    const phone = family.contact_phone.replace(/[^0-9+]/g, "");
+    if (!family.family_name.trim()) next.family_name = "Family / Group name is required";
+    if (!family.mandal) next.mandal = "Mandal is required";
+    if (!family.contact_name.trim()) next.contact_name = "Contact person is required";
+    if (!/^\+?[0-9]{7,15}$/.test(phone)) next.contact_phone = "Enter a valid mobile number";
+    if (family.contact_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(family.contact_email))
+      next.contact_email = "Enter a valid email address";
+    people.forEach((person, index) => {
+      if (!person.name.trim()) next[`people.${index}.name`] = `Passenger ${index + 1} name is required`;
+      if (!person.gender) next[`people.${index}.gender`] = `Passenger ${index + 1} gender is required`;
+      if (person.age === "" || Number(person.age) < 0 || Number(person.age) > 120)
+        next[`people.${index}.age`] = `Passenger ${index + 1} age must be between 0 and 120`;
+    });
+    return next;
+  };
   const advance = () => {
     setError("");
     setStepNotice("");
-    if (step === 1) {
-      const phone = family.contact_phone.replace(/[^0-9+]/g, "");
-      if (
-        !family.family_name.trim() ||
-        !family.mandal ||
-        !family.contact_name.trim() ||
-        !/^\+?[0-9]{7,15}$/.test(phone)
-      )
-        return setError(
-          "Select Mandal and enter family/group name, contact name and a valid mobile number",
-        );
-      if (
-        family.contact_email &&
-        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(family.contact_email)
-      )
-        return setError("Enter a valid email address");
-      if (
-        people.some(
-          (x) =>
-            !x.name.trim() ||
-            !x.age ||
-            Number(x.age) < 0 ||
-            Number(x.age) > 120,
-        )
-      )
-        return setError("Enter a valid name and age for every passenger");
+    let validation = {};
+    if (step === 1) validation = validateStep1();
+    if (step === 2 && !travel) validation.travel = "Select a transportation option";
+    if (step === 3) {
+      if (!room) validation.room = "Select an accommodation option";
+      else if (availableRoomCapacity(roomItem) < accommodationCount)
+        validation.room = `${roomItem?.name || "Selected accommodation"} does not have enough available capacity`;
     }
-    if (step === 3 && availableRoomCapacity(roomItem) < accommodationCount)
-      return setError(
-        `${roomItem?.name || "Selected accommodation"} has no capacity for ${accommodationCount} booked bed(s). Please select another option or ask the administrator to add room inventory.`,
-      );
+    setFieldErrors(validation);
+    if (Object.keys(validation).length) {
+      setError(`Please correct ${Object.keys(validation).length} field${Object.keys(validation).length === 1 ? "" : "s"} highlighted below.`);
+      return;
+    }
     const completed = ["Passenger details", "Transportation", "Accommodation"];
     setStepNotice(`${completed[step - 1]} saved. Continue to the next step.`);
     setStep(step + 1);
   };
   const submit = async () => {
+    if (!paymentReceiver) {
+      setFieldErrors({ paymentReceiver: "Select who you will pay to" });
+      setError("Please correct the highlighted field below.");
+      return;
+    }
     if (!termsAccepted) {
+      setFieldErrors({ terms: "Please accept the booking conditions before submitting" });
       setError("Please accept the booking conditions before submitting");
       return;
     }
+    setFieldErrors({});
     setBusy(true);
     setError("");
     try {
@@ -695,7 +724,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
         ))}
       </div>
       <div className="card form">
-        {error && <div className="alert">{error}</div>}
+        {error && <ErrorToast message={error} onClose={() => setError("")} />}
         {stepNotice && (
           <div className="notice formNotice" role="status" aria-live="polite">
             <b>✓</b> {stepNotice}
@@ -714,15 +743,15 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                 <Field
                   label="Family / Group name"
                   value={family.family_name}
-                  onChange={(v) => setFamily({ ...family, family_name: v })}
+                  error={fieldErrors.family_name}
+                  onChange={(v) => { setFamily({ ...family, family_name: v }); clearFieldError("family_name"); }}
                 />
                 <label>
                   Mandal
                   <select
                     value={family.mandal}
-                    onChange={(event) =>
-                      setFamily({ ...family, mandal: event.target.value })
-                    }
+                    className={fieldErrors.mandal ? "fieldInvalid" : ""}
+                    onChange={(event) => { setFamily({ ...family, mandal: event.target.value }); clearFieldError("mandal"); }}
                   >
                     <option value="">Select Mandal</option>
                     {MANDALS.map((mandal) => (
@@ -731,42 +760,59 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                       </option>
                     ))}
                   </select>
+                  {fieldErrors.mandal && <small className="fieldError">{fieldErrors.mandal}</small>}
                 </label>
               </div>
               <Field
                 label="Contact person"
                 value={family.contact_name}
-                onChange={(v) => setFamily({ ...family, contact_name: v })}
+                error={fieldErrors.contact_name}
+                onChange={(v) => { setFamily({ ...family, contact_name: v }); clearFieldError("contact_name"); }}
               />
               <Field
                 label="Mobile number"
                 value={family.contact_phone}
-                onChange={(v) => setFamily({ ...family, contact_phone: v })}
+                error={fieldErrors.contact_phone}
+                onChange={(v) => { setFamily({ ...family, contact_phone: v }); clearFieldError("contact_phone"); }}
               />
               <Field
                 label="Email (optional)"
                 value={family.contact_email}
-                onChange={(v) => setFamily({ ...family, contact_email: v })}
+                error={fieldErrors.contact_email}
+                onChange={(v) => { setFamily({ ...family, contact_email: v }); clearFieldError("contact_email"); }}
               />
             </div>
             {people.map((p, i) => (
               <div className="passengerEntry" key={i}>
                 <div className="passenger">
-                  <input
-                    placeholder={`Passenger ${i + 1} name`}
-                    value={p.name}
-                    onChange={(e) => update(i, "name", e.target.value)}
-                  />
+                  <label className="passengerField">
+                    <span>Passenger {i + 1} name</span>
+                    <input
+                      className={fieldErrors[`people.${i}.name`] ? "fieldInvalid" : ""}
+                      placeholder={`Passenger ${i + 1} name`}
+                      value={p.name}
+                      onChange={(e) => { update(i, "name", e.target.value); clearFieldError(`people.${i}.name`); }}
+                    />
+                    {fieldErrors[`people.${i}.name`] && <small className="fieldError">{fieldErrors[`people.${i}.name`]}</small>}
+                  </label>
+                  <label className="passengerField">
+                    <span>Gender</span>
                   <select
+                    className={fieldErrors[`people.${i}.gender`] ? "fieldInvalid" : ""}
                     value={p.gender}
-                    onChange={(e) => update(i, "gender", e.target.value)}
+                    onChange={(e) => { update(i, "gender", e.target.value); clearFieldError(`people.${i}.gender`); }}
                   >
                     <option value="MALE">Male</option>
                     <option value="FEMALE">Female</option>
                     <option value="OTHER">Other</option>
                   </select>
+                  {fieldErrors[`people.${i}.gender`] && <small className="fieldError">{fieldErrors[`people.${i}.gender`]}</small>}
+                  </label>
+                  <label className="passengerField">
+                    <span>Age</span>
                   <input
                     type="number"
+                    className={fieldErrors[`people.${i}.age`] ? "fieldInvalid" : ""}
                     placeholder="Age"
                     value={p.age}
                     onChange={(e) => {
@@ -793,8 +839,11 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                             : item,
                         ),
                       );
+                      clearFieldError(`people.${i}.age`);
                     }}
                   />
+                  {fieldErrors[`people.${i}.age`] && <small className="fieldError">{fieldErrors[`people.${i}.age`]}</small>}
+                  </label>
                 </div>
                 <div className="passengerPricing">
                   <span>
@@ -869,12 +918,13 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
               sub={`Select one mode • ${busSeatCount} bus seat(s) for ${people.length} passenger(s)`}
               cost={money(quote.tv)}
             />
+            {fieldErrors.travel && <div className="sectionFieldError">{fieldErrors.travel}</div>}
             <div className="options">
               {tour.travelOptions.map((x) => (
                 <button
                   key={x.id}
                   className={Number(travel) === x.id ? "selected" : ""}
-                  onClick={() => setTravel(x.id)}
+                  onClick={() => { setTravel(x.id); clearFieldError("travel"); }}
                 >
                   <Bus />
                   <span>
@@ -904,6 +954,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
               sub="Select rooms or beds for the complete tour"
               cost={money(quote.stay)}
             />
+            {fieldErrors.room && <div className="sectionFieldError">{fieldErrors.room}</div>}
             <div className="rooms">
               {tour.roomTypes.map((x) => {
                 const remaining = availableRoomCapacity(x);
@@ -915,6 +966,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                     className={`${Number(room) === x.id ? "selected" : ""} ${!available ? "unavailable" : ""}`}
                     onClick={() => {
                       setError("");
+                      clearFieldError("room");
                       setRoom(x.id);
                     }}
                   >
@@ -1035,26 +1087,35 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
               </div>
             </div>
             <div className="paymentCommitment">
-              <label>
-                I will pay to
+              <label className={fieldErrors.paymentReceiver ? "hasFieldError" : ""}>
+                <span>I will pay to</span>
                 <select
+                  className={fieldErrors.paymentReceiver ? "fieldInvalid" : ""}
                   value={paymentReceiver}
-                  onChange={(e) => setPaymentReceiver(e.target.value)}
+                  aria-invalid={!!fieldErrors.paymentReceiver}
+                  onChange={(e) => { setPaymentReceiver(e.target.value); clearFieldError("paymentReceiver"); }}
                 >
                   {PAYMENT_RECEIVERS.map((person) => (
                     <option key={person}>{person}</option>
                   ))}
                 </select>
+                {fieldErrors.paymentReceiver && <small className="fieldError">{fieldErrors.paymentReceiver}</small>}
               </label>
             </div>
             <BookingConditions />
-            <label className="termsAcceptance">
+            <label className={`termsAcceptance ${fieldErrors.terms ? "hasFieldError" : ""}`}>
               <input
                 type="checkbox"
+                className={fieldErrors.terms ? "fieldInvalid" : ""}
                 checked={termsAccepted}
-                onChange={(e) => setTermsAccepted(e.target.checked)}
+                onChange={(e) => {
+                  setTermsAccepted(e.target.checked);
+                  clearFieldError("terms");
+                  if (e.target.checked) setError("");
+                }}
               />
-              I have read and accept all booking conditions.
+              <span>I have read and accept all booking conditions.</span>
+              {fieldErrors.terms && <small className="fieldError">{fieldErrors.terms}</small>}
             </label>
           </>
         )}
@@ -1219,7 +1280,7 @@ function Login({ onLogin }) {
     <div className="card login">
       <LogIn />
       <h2>Administrator login</h2>
-      {error && <div className="alert">{error}</div>}
+      {error && <ErrorToast message={error} onClose={() => setError("")} />}
       <Field label="Email" value={email} onChange={setEmail} />
       <label>
         Password
@@ -1278,7 +1339,7 @@ function TourList({ token, selectedTourId, onSelect, onReports }) {
         title="Tours"
         text="Select a tour to open and manage its complete setup."
       />
-      {error && <div className="alert">{error}</div>}
+      {error && <ErrorToast message={error} onClose={() => setError("")} />}
       <div className="card table tourList">
         {loading ? (
           <p className="tourListMessage">Loading tours…</p>
@@ -1341,7 +1402,7 @@ function TourList({ token, selectedTourId, onSelect, onReports }) {
     </>
   );
 }
-function Admin({ tour, token, refresh }) {
+function Admin({ tour, token, refresh, onBack }) {
   const [setupSection, setSetupSection] = useState("tour"),
     [t, setT] = useState({ ...tour }),
     [travels, setTravels] = useState(tour.travelOptions),
@@ -1520,17 +1581,23 @@ function Admin({ tour, token, refresh }) {
         title="Trip master setup"
         text="Configure tour, travel, accommodation and day-wise itinerary."
         action={
-          setupSection === "tour" ? (
-            <button
-              className="primary"
-              disabled={!!saving}
-              onClick={() => save(`/api/admin/tours/${tour.id}`, t, "Tour")}
-            >
-              {saving === `/api/admin/tours/${tour.id}`
-                ? "Saving tour…"
-                : "Save tour"}
+          <div className="headingActions">
+            <button type="button" className="secondary" onClick={onBack}>
+              <ChevronLeft size={17} />
+              Tour list
             </button>
-          ) : null
+            {setupSection === "tour" && (
+              <button
+                className="primary"
+                disabled={!!saving}
+                onClick={() => save(`/api/admin/tours/${tour.id}`, t, "Tour")}
+              >
+                {saving === `/api/admin/tours/${tour.id}`
+                  ? "Saving tour…"
+                  : "Save tour"}
+              </button>
+            )}
+          </div>
         }
       />
       <div className="setupSubmenu" role="tablist" aria-label="Trip setup">
@@ -1558,7 +1625,7 @@ function Admin({ tour, token, refresh }) {
       </div>
       {message && (
         <div
-          className={messageType === "error" ? "alert" : "notice"}
+          className={messageType === "error" ? "alert appError floatingError" : "notice"}
           role="status"
           aria-live="polite"
         >
@@ -2470,7 +2537,7 @@ function Reports({ tour, token, onEditRegistration }) {
           </button>
         }
       />
-      {error && <div className="alert">{error}</div>}
+      {error && <ErrorToast message={error} onClose={() => setError("")} />}
       <div className="stats">
         <Stat label="Families" value={rows.length} />
         <Stat
@@ -2653,18 +2720,14 @@ function Reports({ tour, token, onEditRegistration }) {
               ].map((x) => (
                 <th key={x}>{x}</th>
               ))}
-              {type === "overall" && (
-                <>
-                  <th>Amount received</th>
-                  <th>Comments</th>
-                </>
-              )}
+              <th>Amount received</th>
+              <th>Comments</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((x) => (
               <tr key={x.id}>
-                <td>
+                <td data-label="Family">
                   <b>{x.family_name}</b>
                   <button
                     type="button"
@@ -2675,24 +2738,22 @@ function Reports({ tour, token, onEditRegistration }) {
                   </button>
                   <small>{x.members}</small>
                 </td>
-                <td>{x.mandal}</td>
-                <td>{x.member_count}</td>
-                <td>{x.bus_seat_count ?? "—"}</td>
-                <td>{x.accommodation_count ?? "—"}</td>
-                <td>{x.travel_mode}</td>
-                <td>{x.assigned_bus || "Self"}</td>
-                <td>{x.room_type}</td>
-                <td className="blank">{x.assigned_rooms}</td>
-                <td>{money(x.food_amount)}</td>
-                <td>{money(x.travel_amount)}</td>
-                <td>{money(x.accommodation_amount)}</td>
-                <td>
+                <td data-label="Mandal">{x.mandal}</td>
+                <td data-label="Members">{x.member_count}</td>
+                <td data-label="Bus seats">{x.bus_seat_count ?? "—"}</td>
+                <td data-label="Accommodation">{x.accommodation_count ?? "—"}</td>
+                <td data-label="Travel mode">{x.travel_mode}</td>
+                <td data-label="Assigned bus">{x.assigned_bus || "Self"}</td>
+                <td data-label="Room type">{x.room_type}</td>
+                <td data-label="Assigned room / floor" className="blank">{x.assigned_rooms}</td>
+                <td data-label="Food">{money(x.food_amount)}</td>
+                <td data-label="Travel ₹">{money(x.travel_amount)}</td>
+                <td data-label="Stay">{money(x.accommodation_amount)}</td>
+                <td data-label="Total">
                   <b>{money(x.total_amount)}</b>
                 </td>
-                <td>{x.payment_receiver || "—"}</td>
-                {type === "overall" && (
-                  <>
-                    <td className="receivedCell">
+                <td data-label="I will pay to">{x.payment_receiver || "—"}</td>
+                <td data-label="Amount received" className="receivedCell">
                       <input
                         aria-label={`Amount received for ${x.family_name}`}
                         type="checkbox"
@@ -2705,8 +2766,8 @@ function Reports({ tour, token, onEditRegistration }) {
                           )
                         }
                       />
-                    </td>
-                    <td className="commentCell">
+                </td>
+                <td data-label="Comments" className="commentCell">
                       <textarea
                         aria-label={`Comments for ${x.family_name}`}
                         value={x.admin_comments || ""}
@@ -2720,9 +2781,7 @@ function Reports({ tour, token, onEditRegistration }) {
                         }
                         onBlur={() => savePaymentNote(x)}
                       />
-                    </td>
-                  </>
-                )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -2731,16 +2790,31 @@ function Reports({ tour, token, onEditRegistration }) {
     </>
   );
 }
-function Field({ label, value, onChange, type = "text" }) {
+function Field({ label, value, onChange, type = "text", error }) {
   return (
-    <label>
-      {label}
+    <label className={error ? "hasFieldError" : ""}>
+      <span>{label}</span>
       <input
+        className={error ? "fieldInvalid" : ""}
         type={type}
         value={value ?? ""}
+        aria-invalid={!!error}
         onChange={(e) => onChange(e.target.value)}
       />
+      {error && <small className="fieldError">{error}</small>}
     </label>
+  );
+}
+function ErrorToast({ message, onClose, onRetry }) {
+  if (!message) return null;
+  return (
+    <div className="alert appError floatingError" role="alert" aria-live="assertive">
+      <span>{message}</span>
+      <div className="errorActions">
+        {onRetry && <button type="button" onClick={onRetry}>Retry</button>}
+        {onClose && <button type="button" className="errorClose" onClick={onClose} aria-label="Dismiss error">×</button>}
+      </div>
+    </div>
   );
 }
 function ConfigField({ label, children, className = "" }) {
