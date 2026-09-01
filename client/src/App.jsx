@@ -1811,6 +1811,29 @@ function Reports({ tour, token }) {
     if (receiverFilter) params.set("payment_receiver", receiverFilter);
     return params.toString();
   }, [busFilter, receiverFilter, roomFilter, type]);
+  const collectionByReceiver = useMemo(() => {
+    const totals = new Map(
+      PAYMENT_RECEIVERS.map((name) => [
+        name,
+        { name, families: 0, total: 0, received: 0 },
+      ]),
+    );
+    rows.forEach((row) => {
+      const name = row.payment_receiver || "Not selected";
+      const current = totals.get(name) || {
+        name,
+        families: 0,
+        total: 0,
+        received: 0,
+      };
+      current.families += 1;
+      current.total += Number(row.total_amount || 0);
+      if (row.amount_received)
+        current.received += Number(row.total_amount || 0);
+      totals.set(name, current);
+    });
+    return [...totals.values()];
+  }, [rows]);
   useEffect(() => {
     const headers = { Authorization: `Bearer ${token}` };
     Promise.all([
@@ -1882,6 +1905,21 @@ function Reports({ tour, token }) {
           value={money(rows.reduce((s, x) => s + Number(x.total_amount), 0))}
         />
       </div>
+      <section className="receiverCollections card">
+        <h2>Collection by payment receiver</h2>
+        <div className="receiverCollectionGrid">
+          {collectionByReceiver.map((receiver) => (
+            <div className="receiverCollection" key={receiver.name}>
+              <span>{receiver.name}</span>
+              <b>{money(receiver.total)}</b>
+              <small>
+                {receiver.families} family/families • Received:{" "}
+                {money(receiver.received)}
+              </small>
+            </div>
+          ))}
+        </div>
+      </section>
       <div className="inventoryGrid">
         <div className="card table">
           <h2>Room inventory remaining</h2>
