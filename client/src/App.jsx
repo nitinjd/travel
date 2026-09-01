@@ -1798,13 +1798,23 @@ function RoomInventoryInline({ room, token, onSaved, onAdded }) {
 }
 function Reports({ tour, token }) {
   const [type, setType] = useState("overall"),
+    [busFilter, setBusFilter] = useState(""),
+    [roomFilter, setRoomFilter] = useState(""),
+    [receiverFilter, setReceiverFilter] = useState(""),
     [rows, setRows] = useState([]),
     [inventory, setInventory] = useState({ rooms: [], buses: [] }),
     [error, setError] = useState("");
+  const reportQuery = useMemo(() => {
+    const params = new URLSearchParams({ type });
+    if (busFilter) params.set("bus_id", busFilter);
+    if (roomFilter) params.set("room_type_id", roomFilter);
+    if (receiverFilter) params.set("payment_receiver", receiverFilter);
+    return params.toString();
+  }, [busFilter, receiverFilter, roomFilter, type]);
   useEffect(() => {
     const headers = { Authorization: `Bearer ${token}` };
     Promise.all([
-      api(`/api/admin/reports/${tour.id}?type=${type}`, { headers }),
+      api(`/api/admin/reports/${tour.id}?${reportQuery}`, { headers }),
       api(`/api/admin/inventory/${tour.id}`, { headers }),
     ])
       .then(([report, stock]) => {
@@ -1812,11 +1822,14 @@ function Reports({ tour, token }) {
         setInventory(stock);
       })
       .catch((e) => setError(e.message));
-  }, [type, tour.id, token]);
+  }, [reportQuery, tour.id, token]);
   const download = async () => {
-    const r = await fetch(`/api/admin/reports/${tour.id}/excel?type=${type}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const r = await fetch(
+      `/api/admin/reports/${tour.id}/excel?${reportQuery}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
     const blob = await r.blob(),
       u = URL.createObjectURL(blob),
       a = document.createElement("a");
@@ -1862,7 +1875,7 @@ function Reports({ tour, token }) {
         <Stat label="Families" value={rows.length} />
         <Stat
           label="Members"
-          value={rows.reduce((s, x) => s + x.member_count, 0)}
+          value={rows.reduce((s, x) => s + Number(x.member_count), 0)}
         />
         <Stat
           label="Collection"
@@ -1877,8 +1890,9 @@ function Reports({ tour, token }) {
               <tr>
                 <th>Type</th>
                 <th>Total units</th>
+                <th>Total capacity</th>
                 <th>Available</th>
-                <th>People capacity left</th>
+                <th>Remaining capacity</th>
               </tr>
             </thead>
             <tbody>
@@ -1886,6 +1900,7 @@ function Reports({ tour, token }) {
                 <tr key={x.room_type_id}>
                   <td>{x.name}</td>
                   <td>{x.total_units}</td>
+                  <td>{x.total_capacity}</td>
                   <td>
                     <b>{x.available_units}</b>
                   </td>
@@ -1925,12 +1940,67 @@ function Reports({ tour, token }) {
         {["overall", "bus", "self", "room"].map((x) => (
           <button
             className={type === x ? "active" : ""}
-            onClick={() => setType(x)}
+            onClick={() => {
+              setType(x);
+              if (x === "self") setBusFilter("");
+            }}
             key={x}
           >
             {x === "self" ? "Self Travel" : x[0].toUpperCase() + x.slice(1)}
           </button>
         ))}
+      </div>
+      <div className="reportFilters card">
+        <ConfigField label="Bus">
+          <select
+            value={busFilter}
+            disabled={type === "self"}
+            onChange={(event) => setBusFilter(event.target.value)}
+          >
+            <option value="">All buses</option>
+            {inventory.buses.map((bus) => (
+              <option key={bus.bus_instance_id} value={bus.bus_instance_id}>
+                {bus.bus_name}
+              </option>
+            ))}
+          </select>
+        </ConfigField>
+        <ConfigField label="Room type">
+          <select
+            value={roomFilter}
+            onChange={(event) => setRoomFilter(event.target.value)}
+          >
+            <option value="">All room types</option>
+            {tour.roomTypes.map((room) => (
+              <option key={room.id} value={room.id}>
+                {room.name}
+              </option>
+            ))}
+          </select>
+        </ConfigField>
+        <ConfigField label="Payment receiver">
+          <select
+            value={receiverFilter}
+            onChange={(event) => setReceiverFilter(event.target.value)}
+          >
+            <option value="">All payment receivers</option>
+            {PAYMENT_RECEIVERS.map((person) => (
+              <option key={person} value={person}>
+                {person}
+              </option>
+            ))}
+          </select>
+        </ConfigField>
+        <button
+          type="button"
+          onClick={() => {
+            setBusFilter("");
+            setRoomFilter("");
+            setReceiverFilter("");
+          }}
+        >
+          Clear filters
+        </button>
       </div>
       <div className="card table">
         <table>
