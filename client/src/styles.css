@@ -279,6 +279,13 @@ select:focus {
   height: 17px;
   flex: 0 0 auto;
 }
+.removePassenger {
+  border: 0;
+  padding: 4px 0;
+  color: #b42318;
+  background: transparent;
+  font-size: 12px;
+}
 .link {
   border: 0;
   background: transparent;
@@ -530,6 +537,19 @@ footer {
 }
 .success h2 {
   margin: 15px 0 6px;
+}
+.success .primary {
+  margin-top: 16px;
+}
+.reportEditLink {
+  display: block;
+  border: 0;
+  padding: 3px 0;
+  color: var(--green);
+  background: transparent;
+  font-weight: 700;
+  text-align: left;
+  text-decoration: underline;
 }
 .login {
   width: min(420px, 100%);
