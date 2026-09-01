@@ -206,6 +206,33 @@ button.danger {
   gap: 14px;
   margin-bottom: 18px;
 }
+.receiverCollections {
+  margin-bottom: 18px;
+}
+.receiverCollections h2 {
+  margin: 0 0 14px;
+}
+.receiverCollectionGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 10px;
+}
+.receiverCollection {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f8f9fc;
+}
+.receiverCollection span,
+.receiverCollection small {
+  color: var(--muted);
+}
+.receiverCollection b {
+  font-size: 20px;
+}
 .inventoryGrid .card {
   padding: 0;
   overflow: hidden;
@@ -585,6 +612,9 @@ button.danger {
   .reportFilters {
     grid-template-columns: 1fr 1fr;
   }
+  .receiverCollectionGrid {
+    grid-template-columns: 1fr 1fr;
+  }
   .availability {
     grid-template-columns: 1fr 1fr;
   }
@@ -624,6 +654,9 @@ button.danger {
     grid-template-columns: 1fr;
   }
   .reportFilters {
+    grid-template-columns: 1fr;
+  }
+  .receiverCollectionGrid {
     grid-template-columns: 1fr;
   }
   .planDays {
