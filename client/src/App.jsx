@@ -82,7 +82,11 @@ export default function App() {
         )}
         {isAdminPage && token && <div className="admin">Administrator</div>}
       </header>
-      <main className={isAdminPage ? "" : "publicMain"}>
+      <main
+        className={
+          !isAdminPage ? "publicMain" : !token ? "loginMain" : "adminMain"
+        }
+      >
         {isAdminPage && token && (
           <nav>
             <button
@@ -1332,6 +1336,12 @@ function Admin({ tour, token, refresh }) {
                   Delete
                 </button>
               </div>
+              <RoomInventoryInline
+                room={x}
+                token={token}
+                onSaved={notify}
+                onAdded={refresh}
+              />
             </div>
           ))}
           <div className="configCard roomConfig newRoomType">
@@ -1449,12 +1459,6 @@ function Admin({ tour, token, refresh }) {
               {saving === "/api/admin/room-types" ? "Adding…" : "Add room type"}
             </button>
           </div>
-          <InventoryBuilder
-            roomTypes={rooms}
-            token={token}
-            onSaved={notify}
-            onAdded={refresh}
-          />
         </div>
         <div className="card wide editor">
           <h2>Travel plan</h2>
@@ -1694,20 +1698,20 @@ function BusInventoryManager({ travelOptions, token, onSaved }) {
     </div>
   );
 }
-function InventoryBuilder({ roomTypes, token, onSaved, onAdded }) {
-  const [roomTypeId, setRoomTypeId] = useState(roomTypes[0]?.id || "");
+function RoomInventoryInline({ room, token, onSaved, onAdded }) {
   const [quantity, setQuantity] = useState(1);
-  const [prefix, setPrefix] = useState("ROOM");
+  const [prefix, setPrefix] = useState(
+    String(room.name || "ROOM")
+      .replace(/[^a-zA-Z0-9]/g, "")
+      .slice(0, 8)
+      .toUpperCase() || "ROOM",
+  );
   const [floor, setFloor] = useState("");
   const [adding, setAdding] = useState(false);
-  const selectedRoom = roomTypes.find((x) => x.id === Number(roomTypeId));
-  useEffect(() => {
-    if (!selectedRoom && roomTypes[0]) setRoomTypeId(roomTypes[0].id);
-  }, [roomTypes, selectedRoom]);
   const add = async () => {
-    if (!selectedRoom || quantity < 1 || !prefix.trim())
+    if (quantity < 1 || !prefix.trim())
       return onSaved(
-        "Select a room type and enter a valid quantity and room prefix.",
+        `Enter a valid quantity and room prefix for ${room.name}.`,
         "error",
       );
     setAdding(true);
@@ -1716,60 +1720,46 @@ function InventoryBuilder({ roomTypes, token, onSaved, onAdded }) {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          room_type_id: Number(roomTypeId),
+          room_type_id: room.id,
           quantity,
           prefix: prefix.trim(),
           floor_number: floor,
-          standard_capacity: selectedRoom.capacity,
-          extra_bed_capacity: selectedRoom.max_extra_beds,
+          standard_capacity: room.capacity,
+          extra_bed_capacity: room.max_extra_beds,
         }),
       });
       onSaved(
-        `${result.created} ${selectedRoom.name} room(s) added with ${selectedRoom.capacity} bed(s) each.`,
+        `${result.created} ${room.name} room(s) added with ${room.capacity} bed(s) each.`,
       );
       await onAdded?.();
     } catch (error) {
-      onSaved(`Could not add room inventory: ${error.message}`, "error");
+      onSaved(
+        `Could not add ${room.name} inventory: ${error.message}`,
+        "error",
+      );
     } finally {
       setAdding(false);
     }
   };
   return (
-    <div className="inventorySection">
-      <h3>Add room inventory</h3>
-      {selectedRoom && (
-        <div
-          className={`inventoryStatus ${Number(selectedRoom.inventory?.total_units || 0) === 0 ? "empty" : ""}`}
-        >
-          <b>{selectedRoom.name}</b>
-          <span>
-            Current inventory: {selectedRoom.inventory?.total_units || 0}{" "}
-            room(s) /unit(s), {selectedRoom.inventory?.remaining_capacity || 0}{" "}
-            bed(s) remaining
-          </span>
-          {Number(selectedRoom.inventory?.total_units || 0) === 0 && (
-            <small>
-              Registration cannot use this room type until inventory is added
-              below.
-            </small>
-          )}
-        </div>
-      )}
-      <div className="inventoryBuilder">
-        <ConfigField label="Room type">
-          <select
-            value={roomTypeId}
-            onChange={(e) => setRoomTypeId(e.target.value)}
-          >
-            {roomTypes.map((x) => (
-              <option value={x.id} key={x.id}>
-                {x.name}
-              </option>
-            ))}
-          </select>
-        </ConfigField>
+    <div className="roomInventoryInline">
+      <h3>Inventory for {room.name}</h3>
+      <div
+        className={`inventoryStatus ${Number(room.inventory?.total_units || 0) === 0 ? "empty" : ""}`}
+      >
+        <span>
+          Current: {room.inventory?.total_units || 0} room(s)/unit(s) •{" "}
+          {room.inventory?.remaining_capacity || 0} bed(s) remaining
+        </span>
+        {Number(room.inventory?.total_units || 0) === 0 && (
+          <small>
+            Registration cannot use this room type until inventory is added.
+          </small>
+        )}
+      </div>
+      <div className="inlineInventoryBuilder">
         <ConfigField label="Beds per room">
-          <input value={selectedRoom?.capacity || ""} disabled />
+          <input value={room.capacity || ""} disabled />
         </ConfigField>
         <ConfigField label="Units to add">
           <input
@@ -1797,10 +1787,10 @@ function InventoryBuilder({ roomTypes, token, onSaved, onAdded }) {
           {adding ? "Adding…" : "Add inventory"}
         </button>
       </div>
-      {selectedRoom?.charge_type === "PER_BED" && (
+      {room.charge_type === "PER_BED" && (
         <small className="sharedHint">
-          Shared allocation is enabled: beds remain available until the room's
-          full capacity is allocated, including across different families.
+          Shared allocation remains available until all beds in these rooms are
+          allocated.
         </small>
       )}
     </div>
