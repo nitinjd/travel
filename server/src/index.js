@@ -10,6 +10,39 @@ import { pool, transaction } from "./db.js";
 import { requireAdmin, signAdmin } from "./auth.js";
 dotenv.config();
 const app = express();
+const mandals = new Set([
+  "Ambegaon",
+  "Bal Mandal",
+  "Balajinagar",
+  "Balewadi",
+  "Balika Mandal",
+  "Dattanagar",
+  "Dhayari",
+  "Hadapsar",
+  "Hinjawadi",
+  "Hinjewadi",
+  "Kalyani Nagar",
+  "Karvenagar",
+  "Kondhwa",
+  "Kothrud",
+  "Lohegaon",
+  "Mandai (Peth)",
+  "Market Yard",
+  "Nigdi",
+  "Pune Hindi",
+  "Pune Mandir",
+  "Pune Rural",
+  "Rajasthani",
+  "Sangvi",
+  "Shivane",
+  "Sinhagad",
+  "Talegaon",
+  "Tathawade",
+  "Thadwade",
+  "Wagholi",
+  "Wakad",
+  "Others",
+]);
 const imageUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024, files: 10 },
@@ -860,6 +893,7 @@ app.post(
   "/api/registrations",
   asyncRoute(async (req, res) => {
     const familyName = String(req.body.family_name || "").trim();
+    const mandal = String(req.body.mandal || "").trim();
     const contactName = String(req.body.contact_name || "").trim();
     const phone = String(req.body.contact_phone || "").replace(/[^0-9+]/g, "");
     const email =
@@ -871,6 +905,8 @@ app.post(
         new Error("Enter family name, contact name and a valid mobile number"),
         { status: 400 },
       );
+    if (!mandals.has(mandal))
+      throw Object.assign(new Error("Select a valid Mandal"), { status: 400 });
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       throw Object.assign(new Error("Enter a valid email address"), {
         status: 400,
@@ -893,6 +929,7 @@ app.post(
     req.body = {
       ...req.body,
       family_name: familyName,
+      mandal,
       contact_name: contactName,
       contact_phone: phone,
       contact_email: email,
@@ -923,10 +960,11 @@ app.post(
         );
       }
       const [r] = await c.query(
-        "INSERT INTO registrations(tour_id,family_name,contact_name,contact_phone,contact_email,travel_option_id,room_type_id,room_units,extra_beds,food_amount,travel_amount,accommodation_amount,total_amount,payment_receiver,terms_accepted,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'SUBMITTED')",
+        "INSERT INTO registrations(tour_id,family_name,mandal,contact_name,contact_phone,contact_email,travel_option_id,room_type_id,room_units,extra_beds,food_amount,travel_amount,accommodation_amount,total_amount,payment_receiver,terms_accepted,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'SUBMITTED')",
         [
           b.tour_id,
           b.family_name,
+          b.mandal,
           b.contact_name,
           b.contact_phone,
           b.contact_email || null,
@@ -1003,6 +1041,7 @@ app.put(
   asyncRoute(async (req, res) => {
     const body = req.body;
     const familyName = String(body.family_name || "").trim();
+    const mandal = String(body.mandal || "").trim();
     const contactName = String(body.contact_name || "").trim();
     const phone = String(body.contact_phone || "").replace(/[^0-9+]/g, "");
     const email =
@@ -1014,6 +1053,8 @@ app.put(
         new Error("Enter family name, contact name and a valid mobile number"),
         { status: 400 },
       );
+    if (!mandals.has(mandal))
+      throw Object.assign(new Error("Select a valid Mandal"), { status: 400 });
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       throw Object.assign(new Error("Enter a valid email address"), {
         status: 400,
@@ -1051,6 +1092,7 @@ app.put(
     const cleanBody = {
       ...body,
       family_name: familyName,
+      mandal,
       contact_name: contactName,
       contact_phone: phone,
       contact_email: email,
@@ -1101,9 +1143,10 @@ app.put(
         req.params.id,
       ]);
       await c.query(
-        "UPDATE registrations SET family_name=?,contact_name=?,contact_phone=?,contact_email=?,travel_option_id=?,room_type_id=?,room_units=?,extra_beds=?,food_amount=?,travel_amount=?,accommodation_amount=?,total_amount=?,payment_receiver=?,terms_accepted=1 WHERE id=?",
+        "UPDATE registrations SET family_name=?,mandal=?,contact_name=?,contact_phone=?,contact_email=?,travel_option_id=?,room_type_id=?,room_units=?,extra_beds=?,food_amount=?,travel_amount=?,accommodation_amount=?,total_amount=?,payment_receiver=?,terms_accepted=1 WHERE id=?",
         [
           cleanBody.family_name,
+          cleanBody.mandal,
           cleanBody.contact_name,
           cleanBody.contact_phone,
           cleanBody.contact_email,
@@ -1158,7 +1201,7 @@ app.put(
   }),
 );
 const reportQuery = `SELECT
-  r.id,r.family_name,r.contact_name,r.contact_phone,r.room_type_id,
+  r.id,r.family_name,r.mandal,r.contact_name,r.contact_phone,r.room_type_id,
   r.room_units,r.extra_beds,r.food_amount,r.travel_amount,
   r.accommodation_amount,r.total_amount,r.payment_receiver,r.terms_accepted,
   r.amount_received,r.admin_comments,r.status,t.name tour_name,t.location,
@@ -1214,6 +1257,7 @@ async function getReport(tourId, type, filters = {}) {
       row.payment_receiver !== filters.paymentReceiver
     )
       return false;
+    if (filters.mandal && row.mandal !== filters.mandal) return false;
     return true;
   });
 }
@@ -1246,6 +1290,7 @@ app.get(
         busId: req.query.bus_id,
         roomTypeId: req.query.room_type_id,
         paymentReceiver: req.query.payment_receiver,
+        mandal: req.query.mandal,
       }),
     ),
   ),
@@ -1301,10 +1346,12 @@ app.get(
         busId: req.query.bus_id,
         roomTypeId: req.query.room_type_id,
         paymentReceiver: req.query.payment_receiver,
+        mandal: req.query.mandal,
       },
     );
     const data = rows.map((x) => ({
       Family: x.family_name,
+      Mandal: x.mandal,
       Contact: x.contact_name,
       Phone: x.contact_phone,
       Members: x.member_count,
