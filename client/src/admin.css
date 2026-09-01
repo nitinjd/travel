@@ -322,7 +322,7 @@ button.danger {
 }
 .reportFilters {
   display: grid;
-  grid-template-columns: repeat(3, minmax(170px, 1fr)) auto;
+  grid-template-columns: repeat(4, minmax(150px, 1fr)) auto;
   gap: 12px;
   align-items: end;
   margin-bottom: 14px;
