@@ -860,68 +860,70 @@ button.danger {
   grid-template-columns: 0.7fr 0.9fr 1.1fr 0.8fr auto;
 }
 
-
-/* Keep report actions visible and mobile-friendly */
-.reportTableWrap { overflow:visible; }
-.reportTable { table-layout:fixed; }
-.reportTable .receivedCell { width:auto; min-width:0; }
-.reportTable .commentCell { width:auto; min-width:0; }
-.reportTable .commentCell textarea { box-sizing:border-box; }
-@media (max-width: 900px) {
-  .setupSubmenu { width:100%; }
-  .roomImageEditor { grid-template-columns:1fr; }
-  .planImages { flex-wrap:wrap; }
-  .inventoryStatus { align-items:flex-start; }
+/* Alignment and readable separation across admin pages */
+.headingActions .primary,
+.headingActions .secondary {
+  min-height: 42px;
+  justify-content: center;
 }
-html[data-theme="dark"] .reportTable tr { background:#111827; }
-html[data-theme="dark"] .tourList tr.selectedTour td { background:#172554; }
-
-/* Final full-width + mobile-safe admin layouts */
-.editor, .adminPanel, .setupPage, .tourList, .reportFilters, .reportTableWrap { width: 100%; max-width: none; min-width: 0; }
-.setupSubmenu { width: 100%; }
-.editor > *, .setupPage > *, .tourList > *, .reportTableWrap > * { min-width: 0; }
-@media (max-width: 650px) {
-  .setupSubmenu { grid-template-columns: 1fr; }
-  .configCard, .editRow, .roomEdit, .planEdit, .inventoryBuilder, .inlineInventoryBuilder, .busInventoryRow, .addBus { grid-template-columns: 1fr !important; }
-  .configActions { width: 100%; flex-wrap: wrap; }
-  .configActions button { flex: 1 1 140px; }
-  .roomImageEditor { grid-template-columns: 1fr !important; }
-  .roomImagePreview { width: 100%; height: 150px; }
-  .planImages { flex-wrap: wrap; }
-  .tourList td:last-child { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-  .tourList td:last-child .primary, .tourList td:last-child .secondary { margin: 0; }
-  .inventoryStatus { line-height: 1.45; }
+.tourList {
+  overflow: hidden;
 }
-@media (max-width: 420px) {
-  .setupSubmenu button { min-height: 42px; }
-  .configActions button { width: 100%; }
+.tourList td:last-child {
+  width: 205px;
 }
-
-
-.newTourForm { max-width: none; }
-.newTourActions { justify-content: flex-end; margin-top: 18px; }
-.headingActions button { display:inline-flex; align-items:center; gap:6px; }
-@media (max-width: 650px) { .newTourActions { flex-direction:column; align-items:stretch; } .newTourActions button { width:100%; } }
-
-.sectionHeaderRow {
+.tourActions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 14px;
+  justify-content: flex-start;
+  gap: 7px;
+  flex-wrap: nowrap;
 }
-.sectionHeaderRow h2 { margin-bottom: 2px; }
-.sectionHint { margin: 0; color: var(--muted); font-size: 13px; }
-.emptyState {
-  padding: 22px;
-  margin-bottom: 12px;
-  border: 1px dashed var(--line);
-  border-radius: 10px;
-  color: var(--muted);
-  text-align: center;
-  background: rgba(127, 127, 127, 0.04);
+.tourActions .reportTourButton {
+  margin-left: 0;
 }
-@media (max-width: 720px) {
-  .sectionHeaderRow { align-items: stretch; flex-direction: column; }
-  .sectionHeaderRow > button { width: 100%; }
+.tourActions .primary,
+.tourActions .secondary {
+  min-height: 38px;
+  height: 38px;
 }
+.configCard {
+  background: #e8ecf3;
+  border-color: #c3ccd9;
+}
+.roomConfig {
+  background: #e3e8f0;
+  border-color: #bdc7d6;
+}
+.itineraryConfig {
+  background: #edf0f5;
+}
+.reportTableWrap {
+  width: 100%;
+  overflow: hidden;
+}
+.reportTable {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+.reportTable th,
+.reportTable td {
+  vertical-align: top;
+  line-height: 1.35;
+}
+.reportTable th:nth-child(1) { width: 10%; }
+.reportTable th:nth-child(2) { width: 7%; }
+.reportTable th:nth-child(3) { width: 5%; }
+.reportTable th:nth-child(4) { width: 7%; }
+.reportTable th:nth-child(5) { width: 8%; }
+.reportTable th:nth-child(6) { width: 8%; }
+.reportTable th:nth-child(7) { width: 10%; }
+.reportTable th:nth-child(8),
+.reportTable th:nth-child(9),
+.reportTable th:nth-child(10),
+.reportTable th:nth-child(11) { width: 6%; }
+.reportTable th:nth-child(12) { width: 8%; }
+.reportTable th:nth-child(13) { width: 5%; }
+.reportTable th:nth-child(14) { width: 8%; }
+.reportTable th:nth-child(15) { width: 6%; }
