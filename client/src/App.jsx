@@ -7,6 +7,7 @@ import {
   Download,
   Hotel,
   LogIn,
+  LogOut,
   MapPin,
   Plus,
   Settings2,
@@ -14,6 +15,18 @@ import {
   Wallet,
 } from "lucide-react";
 const money = (n) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
+const PAYMENT_RECEIVERS = [
+  "Birju Bhatt",
+  "Mahesh Savani",
+  "Mayur Satasiya",
+  "Parin Thakkar",
+];
+const BOOKING_CONDITIONS = [
+  "Booking will be confirmed only after payment is received.",
+  "If any change is required in the plan, accommodation or other arrangements, due diligence will be followed with guidance from the leaders.",
+  "Cancellation and refund are not available after booking is confirmed.",
+  "For children aged 0–5, a bus seat or accommodation bed will not be provided unless it is booked exclusively for the child.",
+];
 const api = async (url, options = {}) => {
   try {
     const r = await fetch(url, {
@@ -46,6 +59,11 @@ export default function App() {
       .then(setTour)
       .catch((e) => setError(e.message));
   }, []);
+  const logout = () => {
+    localStorage.removeItem("tourToken");
+    setToken(null);
+    setTab("admin");
+  };
   return (
     <>
       <header>
@@ -62,10 +80,10 @@ export default function App() {
             {tour.location}
           </div>
         )}
-        {isAdminPage && <div className="admin">Administrator</div>}
+        {isAdminPage && token && <div className="admin">Administrator</div>}
       </header>
       <main className={isAdminPage ? "" : "publicMain"}>
-        {isAdminPage && (
+        {isAdminPage && token && (
           <nav>
             <button
               className={tab === "admin" ? "active" : ""}
@@ -80,6 +98,10 @@ export default function App() {
             >
               <Download />
               Reports
+            </button>
+            <button className="logoutButton" onClick={logout}>
+              <LogOut />
+              Logout
             </button>
           </nav>
         )}
@@ -189,6 +211,7 @@ function TourImageCarousel({ itinerary }) {
 }
 function calculateAccommodation(room, passengerCount) {
   if (!room) return { units: 0, extra: 0 };
+  if (passengerCount <= 0) return { units: 0, extra: 0 };
   if (room.charge_type === "PER_BED")
     return { units: passengerCount, extra: 0 };
   const capacity = Math.max(1, Number(room.capacity || 1));
@@ -201,6 +224,30 @@ function calculateAccommodation(room, passengerCount) {
     extra: Math.max(0, passengerCount - units * capacity),
   };
 }
+function foodChargeForAge(tour, age) {
+  const value = Number(age);
+  if (value <= 5)
+    return Number(tour.food_charge_age_0_5 ?? tour.food_charge_per_person ?? 0);
+  if (value <= 12)
+    return Number(
+      tour.food_charge_age_6_12 ?? tour.food_charge_per_person ?? 0,
+    );
+  return Number(
+    tour.food_charge_age_13_plus ?? tour.food_charge_per_person ?? 0,
+  );
+}
+function BookingConditions({ compact = false }) {
+  return (
+    <div className={`bookingConditions ${compact ? "compact" : ""}`}>
+      <b>Booking conditions</b>
+      <ol>
+        {BOOKING_CONDITIONS.map((condition) => (
+          <li key={condition}>{condition}</li>
+        ))}
+      </ol>
+    </div>
+  );
+}
 function Registration({ tour }) {
   const [step, setStep] = useState(1),
     [family, setFamily] = useState({
@@ -209,40 +256,55 @@ function Registration({ tour }) {
       contact_phone: "",
       contact_email: "",
     }),
-    [people, setPeople] = useState([{ name: "", gender: "MALE", age: "" }]),
+    [people, setPeople] = useState([
+      { name: "", gender: "MALE", age: "", requires_seat_bed: false },
+    ]),
     [travel, setTravel] = useState(tour.travelOptions[0]?.id),
     [room, setRoom] = useState(tour.roomTypes[0]?.id),
     [submitted, setSubmitted] = useState(null),
     [showPlan, setShowPlan] = useState(false),
     [busy, setBusy] = useState(false),
+    [paymentReceiver, setPaymentReceiver] = useState(PAYMENT_RECEIVERS[0]),
+    [termsAccepted, setTermsAccepted] = useState(false),
     [stepNotice, setStepNotice] = useState(""),
     [error, setError] = useState("");
   const travelItem = tour.travelOptions.find((x) => x.id === Number(travel)),
     roomItem = tour.roomTypes.find((x) => x.id === Number(room));
+  const allocationCount = useMemo(
+    () =>
+      people.filter(
+        (passenger) =>
+          Number(passenger.age) >= 6 || passenger.requires_seat_bed,
+      ).length,
+    [people],
+  );
   useEffect(() => {
-    if (Number(roomItem?.inventory?.remaining_capacity || 0) >= people.length)
+    if (Number(roomItem?.inventory?.remaining_capacity || 0) >= allocationCount)
       return;
     const available = tour.roomTypes.find(
       (item) =>
-        Number(item.inventory?.remaining_capacity || 0) >= people.length,
+        Number(item.inventory?.remaining_capacity || 0) >= allocationCount,
     );
     if (available) setRoom(available.id);
-  }, [people.length, room, roomItem, tour.roomTypes]);
+  }, [allocationCount, room, roomItem, tour.roomTypes]);
   const { units, extra } = useMemo(
-    () => calculateAccommodation(roomItem, people.length),
-    [roomItem, people.length],
+    () => calculateAccommodation(roomItem, allocationCount),
+    [roomItem, allocationCount],
   );
   const quote = useMemo(() => {
-    const food = people.length * tour.food_charge_per_person,
+    const food = people.reduce(
+        (sum, passenger) => sum + foodChargeForAge(tour, passenger.age),
+        0,
+      ),
       tv =
         travelItem?.charge_type === "PER_PERSON"
-          ? people.length * travelItem.charge_amount
+          ? allocationCount * travelItem.charge_amount
           : travelItem?.charge_amount || 0,
       stay =
         units * (roomItem?.charge_amount || 0) +
         extra * (roomItem?.extra_bed_charge || 0);
     return { food, tv, stay, total: food + tv + stay };
-  }, [people.length, travelItem, roomItem, units, extra, tour]);
+  }, [people, allocationCount, travelItem, roomItem, units, extra, tour]);
   const update = (i, k, v) =>
     setPeople((p) => p.map((x, n) => (n === i ? { ...x, [k]: v } : x)));
   const advance = () => {
@@ -276,16 +338,20 @@ function Registration({ tour }) {
     }
     if (
       step === 3 &&
-      Number(roomItem?.inventory?.remaining_capacity || 0) < people.length
+      Number(roomItem?.inventory?.remaining_capacity || 0) < allocationCount
     )
       return setError(
-        `${roomItem?.name || "Selected accommodation"} has no capacity for ${people.length} passenger(s). Please select another option or ask the administrator to add room inventory.`,
+        `${roomItem?.name || "Selected accommodation"} has no capacity for ${allocationCount} booked bed(s). Please select another option or ask the administrator to add room inventory.`,
       );
     const completed = ["Passenger details", "Transportation", "Accommodation"];
     setStepNotice(`${completed[step - 1]} saved. Continue to the next step.`);
     setStep(step + 1);
   };
   const submit = async () => {
+    if (!termsAccepted) {
+      setError("Please accept the booking conditions before submitting");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -299,6 +365,8 @@ function Registration({ tour }) {
           room_type_id: Number(room),
           room_units: units,
           extra_beds: extra,
+          payment_receiver: paymentReceiver,
+          terms_accepted: termsAccepted,
         }),
       });
       setSubmitted(result);
@@ -313,6 +381,9 @@ function Registration({ tour }) {
       <div className="card success">
         <i>✓</i>
         <h2>Registration submitted</h2>
+        <p>
+          <b>Booking pending payment confirmation.</b>
+        </p>
         <p>
           Family total: <b>{money(submitted.total_amount)}</b>
         </p>
@@ -359,7 +430,7 @@ function Registration({ tour }) {
             <Title
               icon={<Users />}
               title="Passenger details"
-              sub={`Overall food charge: ${money(tour.food_charge_per_person)} per person`}
+              sub={`Food: age 0–5 ${money(tour.food_charge_age_0_5 || 0)} • age 6–12 ${money(tour.food_charge_age_6_12 ?? 300)} • age 13+ ${money(tour.food_charge_age_13_plus ?? 1000)}`}
               cost={money(quote.food)}
             />
             <div className="grid2">
@@ -385,32 +456,78 @@ function Registration({ tour }) {
               />
             </div>
             {people.map((p, i) => (
-              <div className="passenger" key={i}>
-                <input
-                  placeholder={`Passenger ${i + 1} name`}
-                  value={p.name}
-                  onChange={(e) => update(i, "name", e.target.value)}
-                />
-                <select
-                  value={p.gender}
-                  onChange={(e) => update(i, "gender", e.target.value)}
-                >
-                  <option value="MALE">Male</option>
-                  <option value="FEMALE">Female</option>
-                  <option value="OTHER">Other</option>
-                </select>
-                <input
-                  type="number"
-                  placeholder="Age"
-                  value={p.age}
-                  onChange={(e) => update(i, "age", e.target.value)}
-                />
+              <div className="passengerEntry" key={i}>
+                <div className="passenger">
+                  <input
+                    placeholder={`Passenger ${i + 1} name`}
+                    value={p.name}
+                    onChange={(e) => update(i, "name", e.target.value)}
+                  />
+                  <select
+                    value={p.gender}
+                    onChange={(e) => update(i, "gender", e.target.value)}
+                  >
+                    <option value="MALE">Male</option>
+                    <option value="FEMALE">Female</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                  <input
+                    type="number"
+                    placeholder="Age"
+                    value={p.age}
+                    onChange={(e) => {
+                      const age = e.target.value;
+                      setPeople((current) =>
+                        current.map((item, index) =>
+                          index === i
+                            ? {
+                                ...item,
+                                age,
+                                requires_seat_bed:
+                                  Number(age) >= 6
+                                    ? true
+                                    : Number(item.age) >= 6
+                                      ? false
+                                      : item.requires_seat_bed,
+                              }
+                            : item,
+                        ),
+                      );
+                    }}
+                  />
+                </div>
+                <div className="passengerPricing">
+                  <span>
+                    Food charge: {money(foodChargeForAge(tour, p.age))}
+                  </span>
+                  {p.age !== "" && Number(p.age) <= 5 && (
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={!!p.requires_seat_bed}
+                        onChange={(e) =>
+                          update(i, "requires_seat_bed", e.target.checked)
+                        }
+                      />
+                      Book an exclusive bus seat and accommodation bed for this
+                      child at the regular charges
+                    </label>
+                  )}
+                </div>
               </div>
             ))}
             <button
               className="link"
               onClick={() =>
-                setPeople([...people, { name: "", gender: "MALE", age: "" }])
+                setPeople([
+                  ...people,
+                  {
+                    name: "",
+                    gender: "MALE",
+                    age: "",
+                    requires_seat_bed: false,
+                  },
+                ])
               }
             >
               <Plus />
@@ -423,7 +540,7 @@ function Registration({ tour }) {
             <Title
               icon={<Bus />}
               title="Transportation"
-              sub={`Select one mode for all ${people.length} members`}
+              sub={`Select one mode • ${allocationCount} paid seat(s) for ${people.length} passenger(s)`}
               cost={money(quote.tv)}
             />
             <div className="options">
@@ -445,11 +562,12 @@ function Registration({ tour }) {
                   <strong>
                     {x.mode === "SELF"
                       ? "₹0"
-                      : money(x.charge_amount * people.length)}
+                      : money(x.charge_amount * allocationCount)}
                   </strong>
                 </button>
               ))}
             </div>
+            <BookingConditions compact />
           </>
         )}
         {step === 3 && (
@@ -463,7 +581,8 @@ function Registration({ tour }) {
             <div className="rooms">
               {tour.roomTypes.map((x) => {
                 const available =
-                  Number(x.inventory?.remaining_capacity || 0) >= people.length;
+                  Number(x.inventory?.remaining_capacity || 0) >=
+                  allocationCount;
                 return (
                   <button
                     key={x.id}
@@ -495,7 +614,7 @@ function Registration({ tour }) {
                     {x.description && <small>{x.description}</small>}
                     {!available && (
                       <small className="soldOut">
-                        Unavailable for {people.length} passenger(s) — no
+                        Unavailable for {allocationCount} booked bed(s) — no
                         beds/rooms remain
                       </small>
                     )}
@@ -504,7 +623,10 @@ function Registration({ tour }) {
               })}
             </div>
             <div className="automaticAllocation" role="status">
-              <b>Automatically calculated for {people.length} passenger(s)</b>
+              <b>
+                Automatically calculated: {allocationCount} paid bed(s) for{" "}
+                {people.length} passenger(s)
+              </b>
               <span>
                 {roomItem?.charge_type === "PER_BED"
                   ? `${units} bed(s)`
@@ -512,6 +634,7 @@ function Registration({ tour }) {
               </span>
               <strong>{money(quote.stay)}</strong>
             </div>
+            <BookingConditions compact />
           </>
         )}
         {step === 4 && (
@@ -544,6 +667,11 @@ function Registration({ tour }) {
                   <p key={index}>
                     {index + 1}. {person.name} — {person.gender} — Age{" "}
                     {person.age}
+                    {Number(person.age) <= 5
+                      ? person.requires_seat_bed
+                        ? " — exclusive seat/bed booked"
+                        : " — no seat/bed booked"
+                      : ""}
                   </p>
                 ))}
               </div>
@@ -552,7 +680,7 @@ function Registration({ tour }) {
                 <p>
                   {travelItem?.name}
                   {travelItem?.mode === "BUS"
-                    ? ` • ${people.length} seats required`
+                    ? ` • ${allocationCount} seats required`
                     : ""}
                 </p>
               </div>
@@ -560,7 +688,9 @@ function Registration({ tour }) {
                 <b>Accommodation selection</b>
                 <p>
                   {roomItem?.name} × {units}
-                  {extra ? ` • ${extra} free floor bed(s)` : ""}
+                  {extra
+                    ? ` • ${extra} additional bed(s) at ${money(roomItem.extra_bed_charge)} each`
+                    : ""}
                 </p>
               </div>
             </div>
@@ -573,6 +703,28 @@ function Registration({ tour }) {
                 <strong>{money(quote.total)}</strong>
               </div>
             </div>
+            <div className="paymentCommitment">
+              <label>
+                I will pay to
+                <select
+                  value={paymentReceiver}
+                  onChange={(e) => setPaymentReceiver(e.target.value)}
+                >
+                  {PAYMENT_RECEIVERS.map((person) => (
+                    <option key={person}>{person}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <BookingConditions />
+            <label className="termsAcceptance">
+              <input
+                type="checkbox"
+                checked={termsAccepted}
+                onChange={(e) => setTermsAccepted(e.target.checked)}
+              />
+              I have read and accept all booking conditions.
+            </label>
           </>
         )}
         <footer>
@@ -793,7 +945,9 @@ function Admin({ tour, token, refresh }) {
           ? "Please execute database/05_itinerary_images_maps.sql, then try again."
           : error.message.includes("description")
             ? "Please execute database/06_room_descriptions_extra_beds.sql, then try again."
-            : `Could not save ${label}: ${error.message}`,
+            : error.message.includes("food_charge_age")
+              ? "Please execute database/07_age_pricing_payment_terms.sql, then try again."
+              : `Could not save ${label}: ${error.message}`,
       );
     } finally {
       setSaving("");
@@ -928,17 +1082,44 @@ function Admin({ tour, token, refresh }) {
               onChange={(v) => setT({ ...t, end_date: v })}
             />
             <Field
-              label="Food/person"
-              type="number"
-              value={t.food_charge_per_person}
-              onChange={(v) => setT({ ...t, food_charge_per_person: v })}
-            />
-            <Field
               label="Estimated misc."
               type="number"
               value={t.estimated_misc_expense}
               onChange={(v) => setT({ ...t, estimated_misc_expense: v })}
             />
+          </div>
+          <div className="foodConfig">
+            <h3>Food configuration by age</h3>
+            <div className="grid3">
+              <Field
+                label="Age 0–5 (₹)"
+                type="number"
+                value={t.food_charge_age_0_5 ?? 0}
+                onChange={(v) => setT({ ...t, food_charge_age_0_5: Number(v) })}
+              />
+              <Field
+                label="Age 6–12 (₹)"
+                type="number"
+                value={t.food_charge_age_6_12 ?? 300}
+                onChange={(v) =>
+                  setT({ ...t, food_charge_age_6_12: Number(v) })
+                }
+              />
+              <Field
+                label="Age 13+ (₹)"
+                type="number"
+                value={
+                  t.food_charge_age_13_plus ?? t.food_charge_per_person ?? 1000
+                }
+                onChange={(v) =>
+                  setT({
+                    ...t,
+                    food_charge_age_13_plus: Number(v),
+                    food_charge_per_person: Number(v),
+                  })
+                }
+              />
+            </div>
           </div>
         </div>
         <div className="card editor">
@@ -1776,6 +1957,7 @@ function Reports({ tour, token }) {
                 "Travel ₹",
                 "Stay",
                 "Total",
+                "I will pay to",
               ].map((x) => (
                 <th key={x}>{x}</th>
               ))}
@@ -1805,6 +1987,7 @@ function Reports({ tour, token }) {
                 <td>
                   <b>{money(x.total_amount)}</b>
                 </td>
+                <td>{x.payment_receiver || "—"}</td>
                 {type === "overall" && (
                   <>
                     <td className="receivedCell">
