@@ -903,12 +903,65 @@ app.post(
     });
   }),
 );
-const reportQuery = `SELECT r.id,r.family_name,r.contact_name,r.contact_phone,r.room_units,r.extra_beds,r.food_amount,r.travel_amount,r.accommodation_amount,r.total_amount,r.payment_receiver,r.terms_accepted,r.amount_received,r.admin_comments,r.status,t.name tour_name,t.location,vo.name travel_mode,vo.mode travel_mode_type,rt.name room_type,COUNT(p.id) member_count,GROUP_CONCAT(CONCAT(p.name,' (',p.gender,', ',p.age,CASE WHEN p.age<=5 THEN CASE WHEN p.requires_seat_bed=1 THEN ', child seat/bed booked' ELSE ', no child seat/bed' END ELSE '' END,')') ORDER BY p.id SEPARATOR ', ') members,(SELECT GROUP_CONCAT(CONCAT(ri.room_number,' / Floor ',COALESCE(ri.floor_number,''),' (',rra.standard_beds_allocated+rra.extra_beds_allocated,' bed(s))') ORDER BY ri.id SEPARATOR ', ') FROM registration_room_allocations rra JOIN room_inventory ri ON ri.id=rra.room_inventory_id WHERE rra.registration_id=r.id) assigned_rooms,(SELECT GROUP_CONCAT(CONCAT(bi.bus_name,' (',rba.seats_allocated,' seats)') SEPARATOR ', ') FROM registration_bus_allocations rba JOIN bus_instances bi ON bi.id=rba.bus_instance_id WHERE rba.registration_id=r.id) assigned_bus FROM registrations r JOIN tours t ON t.id=r.tour_id JOIN travel_options vo ON vo.id=r.travel_option_id JOIN room_types rt ON rt.id=r.room_type_id JOIN passengers p ON p.registration_id=r.id WHERE r.tour_id=? GROUP BY r.id ORDER BY vo.name,r.family_name`;
-async function getReport(tourId, type) {
+const reportQuery = `SELECT
+  r.id,r.family_name,r.contact_name,r.contact_phone,r.room_type_id,
+  r.room_units,r.extra_beds,r.food_amount,r.travel_amount,
+  r.accommodation_amount,r.total_amount,r.payment_receiver,r.terms_accepted,
+  r.amount_received,r.admin_comments,r.status,t.name tour_name,t.location,
+  vo.name travel_mode,vo.mode travel_mode_type,rt.name room_type,
+  COUNT(p.id) member_count,
+  GROUP_CONCAT(CONCAT(p.name,' (',p.gender,', ',p.age,
+    CASE WHEN p.age<=5 THEN CASE WHEN p.requires_seat_bed=1
+      THEN ', child seat/bed booked' ELSE ', no child seat/bed' END ELSE '' END,
+    ')') ORDER BY p.id SEPARATOR ', ') members,
+  (SELECT GROUP_CONCAT(CONCAT(ri.room_number,' / Floor ',
+    COALESCE(ri.floor_number,''),' (',
+    rra.standard_beds_allocated+rra.extra_beds_allocated,' bed(s))')
+    ORDER BY ri.id SEPARATOR ', ')
+    FROM registration_room_allocations rra
+    JOIN room_inventory ri ON ri.id=rra.room_inventory_id
+    WHERE rra.registration_id=r.id) assigned_rooms,
+  (SELECT GROUP_CONCAT(CONCAT(bi.bus_name,' (',rba.seats_allocated,' seats)')
+    SEPARATOR ', ')
+    FROM registration_bus_allocations rba
+    JOIN bus_instances bi ON bi.id=rba.bus_instance_id
+    WHERE rba.registration_id=r.id) assigned_bus,
+  (SELECT GROUP_CONCAT(bi.id)
+    FROM registration_bus_allocations rba
+    JOIN bus_instances bi ON bi.id=rba.bus_instance_id
+    WHERE rba.registration_id=r.id) assigned_bus_ids
+FROM registrations r
+JOIN tours t ON t.id=r.tour_id
+JOIN travel_options vo ON vo.id=r.travel_option_id
+JOIN room_types rt ON rt.id=r.room_type_id
+JOIN passengers p ON p.registration_id=r.id
+WHERE r.tour_id=?
+GROUP BY r.id
+ORDER BY vo.name,r.family_name`;
+async function getReport(tourId, type, filters = {}) {
   const [rows] = await pool.query(reportQuery, [tourId]);
-  if (type === "bus") return rows.filter((x) => x.travel_mode_type === "BUS");
-  if (type === "self") return rows.filter((x) => x.travel_mode_type === "SELF");
-  return rows;
+  return rows.filter((row) => {
+    if (type === "bus" && row.travel_mode_type !== "BUS") return false;
+    if (type === "self" && row.travel_mode_type !== "SELF") return false;
+    if (
+      filters.busId &&
+      !String(row.assigned_bus_ids || "")
+        .split(",")
+        .includes(String(filters.busId))
+    )
+      return false;
+    if (
+      filters.roomTypeId &&
+      String(row.room_type_id) !== String(filters.roomTypeId)
+    )
+      return false;
+    if (
+      filters.paymentReceiver &&
+      row.payment_receiver !== filters.paymentReceiver
+    )
+      return false;
+    return true;
+  });
 }
 async function getInventory(tourId) {
   const [rooms, buses] = await Promise.all([
@@ -934,7 +987,13 @@ app.get(
   "/api/admin/reports/:tourId",
   requireAdmin,
   asyncRoute(async (req, res) =>
-    res.json(await getReport(req.params.tourId, req.query.type || "overall")),
+    res.json(
+      await getReport(req.params.tourId, req.query.type || "overall", {
+        busId: req.query.bus_id,
+        roomTypeId: req.query.room_type_id,
+        paymentReceiver: req.query.payment_receiver,
+      }),
+    ),
   ),
 );
 app.patch(
@@ -984,6 +1043,11 @@ app.get(
     const rows = await getReport(
       req.params.tourId,
       req.query.type || "overall",
+      {
+        busId: req.query.bus_id,
+        roomTypeId: req.query.room_type_id,
+        paymentReceiver: req.query.payment_receiver,
+      },
     );
     const data = rows.map((x) => ({
       Family: x.family_name,
@@ -1015,6 +1079,7 @@ app.get(
           Category: "Room",
           Name: x.name,
           Total: x.total_units,
+          "Total Capacity": x.total_capacity,
           Used: x.total_units - x.available_units,
           Remaining: x.available_units,
           "Remaining Capacity": x.remaining_capacity,
