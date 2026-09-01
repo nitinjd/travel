@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bus,
   CalendarDays,
@@ -10,6 +10,7 @@ import {
   LogOut,
   MapPin,
   Plus,
+  Printer,
   Settings2,
   Users,
   Wallet,
@@ -277,94 +278,23 @@ function BookingConditions({ compact = false }) {
     </div>
   );
 }
-async function downloadRegistrationPdf({
-  tour,
-  family,
-  people,
-  travelItem,
-  roomItem,
-  allocationCount,
-  units,
-  extra,
-  quote,
-  paymentReceiver,
-  submitted,
-}) {
+async function downloadRegistrationPdf(element, registrationId) {
+  if (!element) return;
   const { jsPDF } = await import("jspdf");
   const pdf = new jsPDF({ unit: "mm", format: "a4" });
-  const left = 16,
-    width = 178;
-  let y = 18;
-  const add = (text, { size = 10, bold = false, gap = 2 } = {}) => {
-    pdf.setFont("helvetica", bold ? "bold" : "normal");
-    pdf.setFontSize(size);
-    const lines = pdf.splitTextToSize(String(text ?? ""), width);
-    const height = lines.length * (size * 0.42 + 1);
-    if (y + height > 282) {
-      pdf.addPage();
-      y = 18;
-    }
-    pdf.text(lines, left, y);
-    y += height + gap;
-  };
-  const amount = (value) => `Rs. ${Number(value || 0).toLocaleString("en-IN")}`;
-  const assignedRooms = Array.isArray(submitted.assigned_rooms)
-    ? submitted.assigned_rooms.join(", ")
-    : submitted.assigned_rooms || "To be assigned";
-
-  add("TourSetu - Registration Confirmation", { size: 18, bold: true });
-  add(`Registration #${submitted.id}`, { size: 11, bold: true, gap: 5 });
-  add(`Tour: ${tour.name}`, { bold: true });
-  add(`Location: ${tour.location}`);
-  add(`Dates: ${tour.start_date} to ${tour.end_date}`, { gap: 5 });
-
-  add("Family and contact", { size: 13, bold: true });
-  add(`Family / Group: ${family.family_name}`);
-  add(`Contact person: ${family.contact_name}`);
-  add(`Mobile: ${family.contact_phone}`);
-  add(`Email: ${family.contact_email || "Not provided"}`, { gap: 5 });
-
-  add("Passengers", { size: 13, bold: true });
-  people.forEach((person, index) =>
-    add(
-      `${index + 1}. ${person.name} | ${person.gender} | Age ${person.age} | Food ${amount(foodChargeForAge(tour, person.age))}${Number(person.age) <= 5 ? (person.requires_seat_bed ? " | Exclusive seat/bed booked" : " | No seat/bed booked") : ""}`,
-    ),
-  );
-  add(`Total passengers: ${people.length}`, { gap: 5 });
-
-  add("Travel", { size: 13, bold: true });
-  add(`Mode: ${travelItem?.name || ""}`);
-  add(`Paid seats: ${allocationCount}`);
-  add(`Assigned bus: ${submitted.assigned_bus || "Self travel"}`);
-  add(`Travel amount: ${amount(quote.tv)}`, { gap: 5 });
-
-  add("Accommodation", { size: 13, bold: true });
-  add(`Room type: ${roomItem?.name || ""}`);
-  add(
-    `${roomItem?.charge_type === "PER_BED" ? "Beds" : "Rooms"}: ${units}${extra ? ` | Additional beds: ${extra}` : ""}`,
-  );
-  add(`Assigned room(s): ${assignedRooms}`);
-  add(`Accommodation amount: ${amount(quote.stay)}`, { gap: 5 });
-
-  add("Payment summary", { size: 13, bold: true });
-  add(`Food: ${amount(quote.food)}`);
-  add(`Travel: ${amount(quote.tv)}`);
-  add(`Accommodation: ${amount(quote.stay)}`);
-  add(`Total payable: ${amount(submitted.total_amount)}`, {
-    size: 12,
-    bold: true,
+  await pdf.html(element, {
+    margin: [8, 8, 8, 8],
+    autoPaging: "text",
+    width: 194,
+    windowWidth: 900,
+    html2canvas: {
+      backgroundColor: "#ffffff",
+      scale: 0.82,
+      useCORS: true,
+      ignoreElements: (node) => node.classList?.contains("noPrint"),
+    },
   });
-  add(`I will pay to: ${paymentReceiver}`, { gap: 5 });
-
-  add("Booking conditions", { size: 13, bold: true });
-  BOOKING_CONDITIONS.forEach((condition, index) =>
-    add(`${index + 1}. ${condition}`),
-  );
-  add("Booking is pending until payment is confirmed.", {
-    bold: true,
-    gap: 0,
-  });
-  pdf.save(`TourSetu-registration-${submitted.id}.pdf`);
+  pdf.save(`TourSetu-registration-${registrationId}.pdf`);
 }
 function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
   const [step, setStep] = useState(1),
@@ -382,12 +312,14 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
     [submitted, setSubmitted] = useState(null),
     [showPlan, setShowPlan] = useState(false),
     [busy, setBusy] = useState(false),
+    [pdfBusy, setPdfBusy] = useState(false),
     [loadingEdit, setLoadingEdit] = useState(!!adminEditId),
     [editRecord, setEditRecord] = useState(null),
     [paymentReceiver, setPaymentReceiver] = useState(PAYMENT_RECEIVERS[0]),
     [termsAccepted, setTermsAccepted] = useState(false),
     [stepNotice, setStepNotice] = useState(""),
     [error, setError] = useState("");
+  const confirmationRef = useRef(null);
   useEffect(() => {
     if (!adminEditId) return;
     setLoadingEdit(true);
@@ -538,7 +470,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
     return <div className="card">Loading family registration…</div>;
   if (submitted)
     return (
-      <div className="card success confirmation">
+      <div className="card success confirmation" ref={confirmationRef}>
         <div className="confirmationHeading">
           <i>✓</i>
           <h2>
@@ -639,27 +571,28 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
         </div>
         <BookingConditions />
 
-        <div className="confirmationActions">
+        <div className="confirmationActions noPrint">
           <button
             className="primary"
-            onClick={() =>
-              downloadRegistrationPdf({
-                tour,
-                family,
-                people,
-                travelItem,
-                roomItem,
-                allocationCount,
-                units,
-                extra,
-                quote,
-                paymentReceiver,
-                submitted,
-              })
-            }
+            disabled={pdfBusy}
+            onClick={async () => {
+              setPdfBusy(true);
+              try {
+                await downloadRegistrationPdf(
+                  confirmationRef.current,
+                  submitted.id,
+                );
+              } finally {
+                setPdfBusy(false);
+              }
+            }}
           >
             <Download />
-            Download PDF
+            {pdfBusy ? "Preparing PDF…" : "Download PDF"}
+          </button>
+          <button className="secondary" onClick={() => window.print()}>
+            <Printer />
+            Print / Save as PDF
           </button>
           {adminEditId && (
             <button className="secondary" onClick={onAdminDone}>
