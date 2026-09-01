@@ -903,6 +903,189 @@ app.post(
     });
   }),
 );
+app.get(
+  "/api/admin/registrations/:id",
+  requireAdmin,
+  asyncRoute(async (req, res) => {
+    const [[registration]] = await pool.query(
+      "SELECT * FROM registrations WHERE id=?",
+      [req.params.id],
+    );
+    if (!registration)
+      return res.status(404).json({ message: "Registration not found" });
+    const [passengers] = await pool.query(
+      "SELECT id,name,gender,age,requires_seat_bed FROM passengers WHERE registration_id=? ORDER BY id",
+      [req.params.id],
+    );
+    res.json({
+      ...registration,
+      passengers,
+      allocation_count: passengers.filter(
+        (passenger) => passenger.requires_seat_bed,
+      ).length,
+    });
+  }),
+);
+app.put(
+  "/api/admin/registrations/:id",
+  requireAdmin,
+  asyncRoute(async (req, res) => {
+    const body = req.body;
+    const familyName = String(body.family_name || "").trim();
+    const contactName = String(body.contact_name || "").trim();
+    const phone = String(body.contact_phone || "").replace(/[^0-9+]/g, "");
+    const email =
+      String(body.contact_email || "")
+        .trim()
+        .toLowerCase() || null;
+    if (!familyName || !contactName || !/^\+?[0-9]{7,15}$/.test(phone))
+      throw Object.assign(
+        new Error("Enter family name, contact name and a valid mobile number"),
+        { status: 400 },
+      );
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      throw Object.assign(new Error("Enter a valid email address"), {
+        status: 400,
+      });
+    if (
+      !(body.passengers || []).length ||
+      body.passengers.some(
+        (passenger) =>
+          !String(passenger.name || "").trim() ||
+          !["MALE", "FEMALE", "OTHER"].includes(passenger.gender) ||
+          !Number.isFinite(Number(passenger.age)) ||
+          Number(passenger.age) < 0 ||
+          Number(passenger.age) > 120,
+      )
+    )
+      throw Object.assign(
+        new Error("Enter a valid name, gender and age for every passenger"),
+        { status: 400 },
+      );
+    const paymentReceivers = [
+      "Birju Bhatt",
+      "Mahesh Savani",
+      "Mayur Satasiya",
+      "Parin Thakkar",
+    ];
+    if (!paymentReceivers.includes(body.payment_receiver))
+      throw Object.assign(new Error("Select who the family will pay to"), {
+        status: 400,
+      });
+    if (body.terms_accepted !== true)
+      throw Object.assign(
+        new Error("Please accept the booking conditions before saving"),
+        { status: 400 },
+      );
+    const cleanBody = {
+      ...body,
+      family_name: familyName,
+      contact_name: contactName,
+      contact_phone: phone,
+      contact_email: email,
+    };
+    const allocation = await transaction(async (c) => {
+      const [[existing]] = await c.query(
+        "SELECT * FROM registrations WHERE id=? FOR UPDATE",
+        [req.params.id],
+      );
+      if (!existing)
+        throw Object.assign(new Error("Registration not found"), {
+          status: 404,
+        });
+      if (existing.status === "CANCELLED")
+        throw Object.assign(
+          new Error("A cancelled registration cannot be edited"),
+          { status: 409 },
+        );
+      cleanBody.tour_id = existing.tour_id;
+      const quote = await calculateQuote(cleanBody, c);
+      const [[duplicate]] = await c.query(
+        "SELECT id,family_name,contact_phone,contact_email FROM registrations WHERE tour_id=? AND id<>? AND (LOWER(TRIM(family_name))=LOWER(?) OR contact_phone=? OR (? IS NOT NULL AND LOWER(contact_email)=LOWER(?))) LIMIT 1",
+        [
+          existing.tour_id,
+          req.params.id,
+          cleanBody.family_name,
+          cleanBody.contact_phone,
+          cleanBody.contact_email,
+          cleanBody.contact_email,
+        ],
+      );
+      if (duplicate)
+        throw Object.assign(
+          new Error(
+            "Family name, mobile number or email is already registered for this tour",
+          ),
+          { status: 409 },
+        );
+      await c.query(
+        "DELETE FROM registration_bus_allocations WHERE registration_id=?",
+        [req.params.id],
+      );
+      await c.query(
+        "DELETE FROM registration_room_allocations WHERE registration_id=?",
+        [req.params.id],
+      );
+      await c.query("DELETE FROM passengers WHERE registration_id=?", [
+        req.params.id,
+      ]);
+      await c.query(
+        "UPDATE registrations SET family_name=?,contact_name=?,contact_phone=?,contact_email=?,travel_option_id=?,room_type_id=?,room_units=?,extra_beds=?,food_amount=?,travel_amount=?,accommodation_amount=?,total_amount=?,payment_receiver=?,terms_accepted=1 WHERE id=?",
+        [
+          cleanBody.family_name,
+          cleanBody.contact_name,
+          cleanBody.contact_phone,
+          cleanBody.contact_email,
+          cleanBody.travel_option_id,
+          cleanBody.room_type_id,
+          quote.units,
+          quote.extraBeds,
+          quote.food_amount,
+          quote.travel_amount,
+          quote.accommodation_amount,
+          quote.total_amount,
+          cleanBody.payment_receiver,
+          req.params.id,
+        ],
+      );
+      for (const passenger of quote.passengers)
+        await c.query(
+          "INSERT INTO passengers(registration_id,name,gender,age,requires_seat_bed) VALUES(?,?,?,?,?)",
+          [
+            req.params.id,
+            String(passenger.name).trim(),
+            passenger.gender,
+            passenger.age,
+            passenger.requires_seat_bed ? 1 : 0,
+          ],
+        );
+      const rooms = await allocateRooms(
+        c,
+        req.params.id,
+        quote.room,
+        quote.units,
+        quote.allocation_count,
+        quote.extraBeds,
+      );
+      const bus = await allocateBus(
+        c,
+        req.params.id,
+        quote.travel,
+        quote.allocation_count,
+      );
+      return { rooms, bus };
+    });
+    const [[registration]] = await pool.query(
+      "SELECT * FROM registrations WHERE id=?",
+      [req.params.id],
+    );
+    res.json({
+      ...registration,
+      assigned_rooms: allocation.rooms,
+      assigned_bus: allocation.bus,
+    });
+  }),
+);
 const reportQuery = `SELECT
   r.id,r.family_name,r.contact_name,r.contact_phone,r.room_type_id,
   r.room_units,r.extra_beds,r.food_amount,r.travel_amount,
