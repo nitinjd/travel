@@ -269,6 +269,7 @@ app.get(
   asyncRoute(async (req, res) => {
     const id = req.params.id;
     const [[tour]] = await pool.query("SELECT * FROM tours WHERE id=?", [id]);
+    if (!tour) return res.status(404).json({ message: "Tour not found" });
     const [travelOptions, roomTypes, itinerary] = await Promise.all([
       pool.query(
         "SELECT * FROM travel_options WHERE tour_id=? ORDER BY sort_order,id",
@@ -283,11 +284,59 @@ app.get(
         [id],
       ),
     ]);
+    let itineraryImages = [[]],
+      roomTypeImages = [[]];
+    try {
+      itineraryImages = await pool.query(
+        "SELECT ii.id,ii.itinerary_item_id,ii.file_name,ii.sort_order FROM itinerary_images ii JOIN itinerary_items item ON item.id=ii.itinerary_item_id WHERE item.tour_id=? ORDER BY ii.sort_order,ii.id",
+        [id],
+      );
+    } catch (error) {
+      if (error.code !== "ER_NO_SUCH_TABLE") throw error;
+    }
+    try {
+      roomTypeImages = await pool.query(
+        "SELECT rti.id,rti.room_type_id,rti.file_name,UNIX_TIMESTAMP(rti.updated_at) version FROM room_type_images rti JOIN room_types rt ON rt.id=rti.room_type_id WHERE rt.tour_id=?",
+        [id],
+      );
+    } catch (error) {
+      if (error.code !== "ER_NO_SUCH_TABLE") throw error;
+    }
+    const inventory = await getInventory(id);
     res.json({
-      tour,
-      travelOptions: travelOptions[0],
-      roomTypes: roomTypes[0],
-      itinerary: itinerary[0],
+      ...tour,
+      travelOptions: travelOptions[0].map((option) => ({
+        ...option,
+        inventory: inventory.buses.filter(
+          (bus) => bus.travel_option_id === option.id,
+        ),
+      })),
+      roomTypes: roomTypes[0].map((room) => ({
+        ...room,
+        image: roomTypeImages[0]
+          .filter((image) => image.room_type_id === room.id)
+          .map((image) => ({
+            ...image,
+            url: `/api/room-type-images/${image.id}?v=${image.version}`,
+          }))[0],
+        inventory: inventory.rooms.find(
+          (stock) => stock.room_type_id === room.id,
+        ) || {
+          total_units: 0,
+          available_units: 0,
+          total_capacity: 0,
+          remaining_capacity: 0,
+        },
+      })),
+      itinerary: itinerary[0].map((item) => ({
+        ...item,
+        images: itineraryImages[0]
+          .filter((image) => image.itinerary_item_id === item.id)
+          .map((image) => ({
+            ...image,
+            url: `/api/itinerary-images/${image.id}`,
+          })),
+      })),
     });
   }),
 );
