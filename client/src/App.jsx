@@ -71,11 +71,49 @@ const MANDALS = [
   "Others",
 ];
 const BOOKING_CONDITIONS = [
-  "Booking will be confirmed only after payment is received.",
-  "If any change is required in the plan, accommodation or other arrangements, due diligence will be followed with guidance from the leaders.",
-  "Cancellation and refund are not available after booking is confirmed.",
-  "For children aged 0–5, bus seating and accommodation are optional and charged only when selected for the child.",
+  {
+    en: "Booking will be confirmed only after payment is received.",
+    gu: "ચુકવણી પ્રાપ્ત થયા બાદ જ બુકિંગની પુષ્ટિ કરવામાં આવશે.",
+  },
+  {
+    en: "If any change is required in the plan, accommodation or other arrangements, due diligence will be followed with guidance from the leaders.",
+    gu: "પ્લાન, રહેઠાણ અથવા અન્ય વ્યવસ્થામાં કોઈ ફેરફાર જરૂરી બને તો આગેવાનોના માર્ગદર્શન હેઠળ યોગ્ય નિર્ણય લેવામાં આવશે.",
+  },
+  {
+    en: "Cancellation and refund are not available after booking is confirmed.",
+    gu: "બુકિંગની પુષ્ટિ થયા બાદ કેન્સલેશન અથવા રિફંડ ઉપલબ્ધ રહેશે નહીં.",
+  },
+  {
+    en: "For children aged 0–5, bus seating and accommodation are optional and charged only when selected for the child.",
+    gu: "૦ થી ૫ વર્ષની ઉંમરના બાળકો માટે બસ સીટ અને રહેઠાણ વૈકલ્પિક છે અને પસંદગી કરવામાં આવે ત્યારે જ તેનો ચાર્જ લેવામાં આવશે.",
+  },
+  {
+    en: "By choosing a shared room, you agree to adjust and cooperate with other karyakars.",
+    gu: "શેર કરેલ રૂમ પસંદ કરીને, તમે અન્ય કાર્યકરો સાથે સમાયોજન અને સહકાર આપવા સંમત થાઓ છો.",
+  },
+  {
+    en: "The trip rules and planned route apply equally to all travellers, including those travelling in their own vehicles.",
+    gu: "પ્રવાસના નિયમો અને નક્કી કરાયેલ માર્ગ પોતાના વાહનમાં પ્રવાસ કરતા મુસાફરો સહિત તમામ પ્રવાસીઓને સમાન રીતે લાગુ પડશે.",
+  },
+  {
+    en: "Food will be arranged by the Mandir. Individual food preferences or special requests cannot be accommodated.",
+    gu: "ભોજન મંદિર દ્વારા વ્યવસ્થા કરવામાં આવશે. વ્યક્તિગત ભોજન પસંદગી અથવા ખાસ વિનંતીઓ સ્વીકારી શકાશે નહીં.",
+  },
+  {
+    en: "A small or large bus will be arranged based on the total number of registrations.",
+    gu: "કુલ નોંધણીઓની સંખ્યાના આધારે નાની અથવા મોટી બસની વ્યવસ્થા કરવામાં આવશે.",
+  },
+  {
+    en: "For any questions or concerns, contact Mayur Satasiya or Harikrushna Vasan.",
+    gu: "કોઈપણ પ્રશ્ન અથવા ચિંતા માટે Mayur Satasiya અથવા Harikrushna Vasan નો સંપર્ક કરો.",
+  },
 ];
+const SECTION_CONDITIONS = {
+  passengers: [BOOKING_CONDITIONS[6]],
+  travel: [BOOKING_CONDITIONS[5], BOOKING_CONDITIONS[7]],
+  stay: [BOOKING_CONDITIONS[4]],
+  review: BOOKING_CONDITIONS,
+};
 const api = async (url, options = {}) => {
   try {
     const r = await fetch(url, {
@@ -358,15 +396,28 @@ function foodChargeForAge(tour, age) {
     tour.food_charge_age_13_plus ?? tour.food_charge_per_person ?? 0,
   );
 }
-function BookingConditions({ compact = false }) {
+function BookingConditions({ compact = false, items = BOOKING_CONDITIONS }) {
   return (
     <div className={`bookingConditions ${compact ? "compact" : ""}`}>
-      <b>Booking conditions</b>
+      <b>Booking conditions / બુકિંગની શરતો</b>
       <ol>
-        {BOOKING_CONDITIONS.map((condition) => (
-          <li key={condition}>{condition}</li>
+        {items.map((condition) => (
+          <li key={condition.en}>
+            <div>{condition.en}</div>
+            <div className="gujaratiText">{condition.gu}</div>
+          </li>
         ))}
       </ol>
+    </div>
+  );
+}
+function ContactConditions() {
+  const item = BOOKING_CONDITIONS[8];
+  return (
+    <div className="contactConditions">
+      <b>Questions / પ્રશ્નો</b>
+      <p>{item.en}</p>
+      <p className="gujaratiText">{item.gu}</p>
     </div>
   );
 }
@@ -903,6 +954,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                 </div>
               </div>
             ))}
+            <BookingConditions compact items={SECTION_CONDITIONS.passengers} />
             <button
               className="link"
               onClick={() =>
@@ -956,7 +1008,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                 </button>
               ))}
             </div>
-            <BookingConditions compact />
+            <BookingConditions compact items={SECTION_CONDITIONS.travel} />
           </>
         )}
         {step === 3 && (
@@ -1019,6 +1071,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                 );
               })}
             </div>
+            <BookingConditions compact items={SECTION_CONDITIONS.stay} />
             <div className="automaticAllocation" role="status">
               <b>
                 Automatically calculated: {accommodationCount} paid bed(s) for{" "}
@@ -1031,7 +1084,6 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
               </span>
               <strong>{money(quote.stay)}</strong>
             </div>
-            <BookingConditions compact />
           </>
         )}
         {step === 4 && (
@@ -1115,7 +1167,8 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                 {fieldErrors.paymentReceiver && <small className="fieldError">{fieldErrors.paymentReceiver}</small>}
               </label>
             </div>
-            <BookingConditions />
+            <BookingConditions items={SECTION_CONDITIONS.review} />
+            <ContactConditions />
             <label className={`termsAcceptance ${fieldErrors.terms ? "hasFieldError" : ""}`}>
               <input
                 type="checkbox"

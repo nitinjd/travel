@@ -1447,3 +1447,19 @@ header .headerActions .themeToggle {
     max-width: 40%;
   }
 }
+
+.gujaratiText {
+  margin-top: 0.2rem;
+  opacity: 0.9;
+}
+.bookingConditions li + li {
+  margin-top: 0.65rem;
+}
+.contactConditions {
+  margin-top: 1rem;
+  padding: 0.9rem 1rem;
+  border-radius: 12px;
+  border: 1px solid var(--border, #d7dce5);
+  background: var(--surface-soft, rgba(127, 127, 127, 0.06));
+}
+.contactConditions p { margin: 0.35rem 0 0; }
