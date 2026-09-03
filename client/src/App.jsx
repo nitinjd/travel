@@ -440,7 +440,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
     [busy, setBusy] = useState(false),
     [loadingEdit, setLoadingEdit] = useState(!!adminEditId),
     [editRecord, setEditRecord] = useState(null),
-    [paymentReceiver, setPaymentReceiver] = useState(PAYMENT_RECEIVERS[0]),
+    [paymentReceiver, setPaymentReceiver] = useState(""),
     [termsAccepted, setTermsAccepted] = useState(false),
     [stepNotice, setStepNotice] = useState(""),
     [error, setError] = useState(""),
@@ -470,7 +470,7 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
         );
         setTravel(record.travel_option_id);
         setRoom(record.room_type_id);
-        setPaymentReceiver(record.payment_receiver || PAYMENT_RECEIVERS[0]);
+        setPaymentReceiver(record.payment_receiver || "");
         setTermsAccepted(!!record.terms_accepted);
         setError("");
       })
@@ -1160,10 +1160,12 @@ function Registration({ tour, adminEditId = null, token = "", onAdminDone }) {
                   aria-invalid={!!fieldErrors.paymentReceiver}
                   onChange={(e) => { setPaymentReceiver(e.target.value); clearFieldError("paymentReceiver"); }}
                 >
+                  <option value="">Select</option>
                   {PAYMENT_RECEIVERS.map((person) => (
-                    <option key={person}>{person}</option>
+                    <option key={person} value={person}>{person}</option>
                   ))}
                 </select>
+                <span className="paymentTransferHint">Payment should be transferred to the Sah Nirdeskah of your nearby Parasabha mandal.</span>
                 {fieldErrors.paymentReceiver && <small className="fieldError">{fieldErrors.paymentReceiver}</small>}
               </label>
             </div>

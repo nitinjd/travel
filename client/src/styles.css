@@ -525,6 +525,18 @@ footer {
   border: 1px solid var(--line);
   border-radius: 10px;
 }
+.paymentTransferHint {
+  display: inline;
+  margin-left: 0.55rem;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+@media (max-width: 640px) {
+  .paymentTransferHint {
+    display: block;
+    margin: 0.35rem 0 0;
+  }
+}
 .paymentCommitment label {
   margin: 0;
 }
