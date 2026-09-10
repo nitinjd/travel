@@ -9,6 +9,8 @@ import {
   LogIn,
   LogOut,
   MapPin,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Printer,
   Settings2,
@@ -141,6 +143,9 @@ export default function App() {
     [selectedAdminTour, setSelectedAdminTour] = useState(null),
     [tab, setTab] = useState("tours"),
     [editingRegistrationId, setEditingRegistrationId] = useState(null),
+    [menuHidden, setMenuHidden] = useState(
+      () => localStorage.getItem("tourAdminMenuHidden") === "true",
+    ),
     [token, setToken] = useState(localStorage.getItem("tourToken")),
     [error, setError] = useState(""),
     [darkMode, setDarkMode] = useState(() => localStorage.getItem("tourDarkMode") === "1");
@@ -211,6 +216,20 @@ export default function App() {
           </button>
           {isAdminPage && token && (
             <>
+              <button
+                type="button"
+                className="adminMenuToggle"
+                aria-label={menuHidden ? "Show administrator menu" : "Hide administrator menu"}
+                title={menuHidden ? "Show menu" : "Hide menu"}
+                onClick={() => {
+                  const next = !menuHidden;
+                  setMenuHidden(next);
+                  localStorage.setItem("tourAdminMenuHidden", String(next));
+                }}
+              >
+                {menuHidden ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
+                <span>{menuHidden ? "Show menu" : "Hide menu"}</span>
+              </button>
               <div className="admin">Administrator</div>
               <button type="button" className="headerLogout" onClick={logout}>
                 <LogOut size={16} />
@@ -221,10 +240,48 @@ export default function App() {
         </div>
       </header>
       <main
-        className={
+        className={`${
           !isAdminPage ? "publicMain" : !token ? "loginMain" : "adminMain"
-        }
+        }${isAdminPage && token && menuHidden ? " menuHidden" : ""}`}
       >
+        {isAdminPage && token && (
+          <nav aria-label="Administrator menu">
+            <button
+              type="button"
+              className={tab === "tours" ? "active" : ""}
+              onClick={() => {
+                setEditingRegistrationId(null);
+                setTab("tours");
+              }}
+            >
+              <CalendarDays />
+              Tours
+            </button>
+            <button
+              type="button"
+              className={tab === "admin" || tab === "newTour" ? "active" : ""}
+              onClick={() => setTab(selectedAdminTour ? "admin" : "tours")}
+            >
+              <Settings2 />
+              Trip setup
+            </button>
+            <button
+              type="button"
+              className={tab === "reports" || tab === "registration" ? "active" : ""}
+              onClick={() => {
+                setEditingRegistrationId(null);
+                setTab(adminTour ? "reports" : "tours");
+              }}
+            >
+              <Download />
+              Reports
+            </button>
+            <button type="button" className="logoutButton" onClick={logout}>
+              <LogOut />
+              Logout
+            </button>
+          </nav>
+        )}
         <section className="content">
           {error && (
             <ErrorToast message={error} onRetry={() => window.location.reload()} onClose={() => setError("")} />
