@@ -902,6 +902,83 @@ html[data-theme="dark"] .tourList tr.selectedTour td { background:#172554; }
   .configActions button { width: 100%; }
 }
 
+/* Mobile tour list: replace the compressed desktop table with readable cards. */
+@media (max-width: 650px) {
+  .tourList {
+    padding: 0;
+    overflow: visible;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .tourList table,
+  .tourList tbody {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+  .tourList thead { display: none; }
+  .tourList tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 14px;
+    margin-bottom: 12px;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface, #fff);
+    box-shadow: 0 6px 20px rgba(23, 37, 84, 0.07);
+  }
+  .tourList td {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: auto !important;
+    min-width: 0 !important;
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--line);
+    overflow-wrap: anywhere;
+  }
+  .tourList td::before {
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+  }
+  .tourList td:nth-child(1),
+  .tourList td:nth-child(2),
+  .tourList td:nth-child(5),
+  .tourList td:nth-child(6) { grid-column: 1 / -1; }
+  .tourList td:nth-child(1)::before { content: "Tour"; }
+  .tourList td:nth-child(2)::before { content: "Location"; }
+  .tourList td:nth-child(3)::before { content: "Start date"; }
+  .tourList td:nth-child(4)::before { content: "End date"; }
+  .tourList td:nth-child(5)::before { content: "Status"; }
+  .tourList td:nth-child(6)::before { content: none; }
+  .tourList td:nth-child(5) { border-bottom: 0; }
+  .tourList td:last-child {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 8px 0 0;
+    border-bottom: 0;
+  }
+  .tourList td:last-child .primary,
+  .tourList td:last-child .secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+    min-height: 42px;
+    margin: 0;
+    padding-inline: 8px;
+    white-space: nowrap;
+  }
+}
+
 
 .newTourForm { max-width: none; }
 .newTourActions { justify-content: flex-end; margin-top: 18px; }
