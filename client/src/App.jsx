@@ -2630,6 +2630,7 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
     [roomFilter, setRoomFilter] = useState(""),
     [mandalFilter, setMandalFilter] = useState(""),
     [receiverFilter, setReceiverFilter] = useState(""),
+    [genderFilter, setGenderFilter] = useState(""),
     [rows, setRows] = useState([]),
     [inventory, setInventory] = useState({ rooms: [], buses: [] }),
     [error, setError] = useState("");
@@ -2639,8 +2640,9 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
     if (roomFilter) params.set("room_type_id", roomFilter);
     if (mandalFilter) params.set("mandal", mandalFilter);
     if (receiverFilter) params.set("payment_receiver", receiverFilter);
+    if (genderFilter) params.set("gender", genderFilter);
     return params.toString();
-  }, [busFilter, mandalFilter, receiverFilter, roomFilter, type]);
+  }, [busFilter, genderFilter, mandalFilter, receiverFilter, roomFilter, type]);
   const collectionByReceiver = useMemo(() => {
     const totals = new Map(
       PAYMENT_RECEIVERS.map((name) => [
@@ -2710,6 +2712,17 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
       setError(e.message);
     }
   };
+  const roomGenderCounts = useMemo(() => {
+    const map = new Map();
+    rows.forEach((row) => {
+      const key = String(row.room_type_id);
+      const current = map.get(key) || { male: 0, female: 0 };
+      current.male += Number(row.male_count || 0);
+      current.female += Number(row.female_count || 0);
+      map.set(key, current);
+    });
+    return map;
+  }, [rows]);
   return (
     <>
       <Heading
@@ -2730,17 +2743,30 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
         }
       />
       {error && <ErrorToast message={error} onClose={() => setError("")} />}
-      <div className="stats">
-        <Stat label="Families" value={rows.length} />
-        <Stat
-          label="Members"
-          value={rows.reduce((s, x) => s + Number(x.member_count), 0)}
-        />
-        <Stat
-          label="Collection"
-          value={money(rows.reduce((s, x) => s + Number(x.total_amount), 0))}
-        />
-      </div>
+      {(() => {
+        const busFamilies = rows.filter((x) => x.travel_mode_type === "BUS").length;
+        const selfFamilies = rows.filter((x) => x.travel_mode_type === "SELF").length;
+        const busMembers = rows.reduce((s, x) => s + Number(x.bus_seat_count || 0), 0);
+        const selfMembers = rows
+          .filter((x) => x.travel_mode_type === "SELF")
+          .reduce((s, x) => s + Number(x.member_count || 0), 0);
+        return (
+          <div className="stats">
+            <Stat
+              label="Families"
+              value={`${rows.length} (Bus: ${busFamilies} • Self: ${selfFamilies})`}
+            />
+            <Stat
+              label="Members"
+              value={`${rows.reduce((s, x) => s + Number(x.member_count || 0), 0)} (Bus: ${busMembers} • Self: ${selfMembers})`}
+            />
+            <Stat
+              label="Collection"
+              value={money(rows.reduce((s, x) => s + Number(x.total_amount), 0))}
+            />
+          </div>
+        );
+      })()}
       <section className="receiverCollections card">
         <h2>Collection by payment receiver</h2>
         <div className="receiverCollectionGrid">
@@ -2766,6 +2792,8 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
                 <th>Total units</th>
                 <th>Total capacity</th>
                 <th>Available</th>
+                <th>Male</th>
+                <th>Female</th>
                 <th>Remaining capacity</th>
               </tr>
             </thead>
@@ -2778,6 +2806,8 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
                   <td>
                     <b>{x.available_units}</b>
                   </td>
+                  <td>{roomGenderCounts.get(String(x.room_type_id))?.male || 0}</td>
+                  <td>{roomGenderCounts.get(String(x.room_type_id))?.female || 0}</td>
                   <td>{x.remaining_capacity}</td>
                 </tr>
               ))}
@@ -2878,6 +2908,16 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
             ))}
           </select>
         </ConfigField>
+        <ConfigField label="Gender">
+          <select
+            value={genderFilter}
+            onChange={(event) => setGenderFilter(event.target.value)}
+          >
+            <option value="">All genders</option>
+            <option value="MALE">Male</option>
+            <option value="FEMALE">Female</option>
+          </select>
+        </ConfigField>
         <button
           type="button"
           onClick={() => {
@@ -2885,6 +2925,7 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
             setRoomFilter("");
             setMandalFilter("");
             setReceiverFilter("");
+            setGenderFilter("");
           }}
         >
           Clear filters
@@ -2898,6 +2939,8 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
                 "Family",
                 "Mandal",
                 "Members",
+                "Male",
+                "Female",
                 "Bus seats",
                 "Accommodation",
                 "Travel mode",
@@ -2932,6 +2975,8 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
                 </td>
                 <td data-label="Mandal">{x.mandal}</td>
                 <td data-label="Members">{x.member_count}</td>
+                <td data-label="Male">{x.male_count ?? 0}</td>
+                <td data-label="Female">{x.female_count ?? 0}</td>
                 <td data-label="Bus seats">{x.bus_seat_count ?? "—"}</td>
                 <td data-label="Accommodation">{x.accommodation_count ?? "—"}</td>
                 <td data-label="Travel mode">{x.travel_mode}</td>
