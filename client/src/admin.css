@@ -902,6 +902,48 @@ html[data-theme="dark"] .tourList tr.selectedTour td { background:#172554; }
   .configActions button { width: 100%; }
 }
 
+/* Keep payment controls visible in the wide desktop report. */
+@media (min-width: 901px) {
+  .reportTableWrap {
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  .reportTable {
+    width: 100%;
+    min-width: 1900px;
+    table-layout: auto !important;
+  }
+  .reportTable th,
+  .reportTable td {
+    width: auto !important;
+  }
+  .reportTable th:nth-child(17),
+  .reportTable td:nth-child(17) {
+    position: sticky;
+    right: 240px;
+    z-index: 2;
+    width: 120px !important;
+    min-width: 120px;
+    background: var(--surface, #fff);
+    box-shadow: -8px 0 12px rgba(23, 37, 84, 0.08);
+  }
+  .reportTable th:nth-child(18),
+  .reportTable td:nth-child(18) {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    width: 240px !important;
+    min-width: 240px;
+    background: var(--surface, #fff);
+  }
+  .reportTable th:nth-child(17),
+  .reportTable th:nth-child(18) {
+    z-index: 3;
+    background: var(--surface-3, #eef1f6);
+  }
+}
+
 /* Mobile tour list: replace the compressed desktop table with readable cards. */
 @media (max-width: 650px) {
   .tourList {
