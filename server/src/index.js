@@ -1339,6 +1339,8 @@ const reportQuery = `SELECT
   COUNT(p.id) member_count,
   SUM(CASE WHEN p.age>=6 OR p.requires_bus_seat=1 THEN 1 ELSE 0 END) bus_seat_count,
   SUM(CASE WHEN p.age>=6 OR p.requires_accommodation=1 THEN 1 ELSE 0 END) accommodation_count,
+  SUM(CASE WHEN (p.age>=6 OR p.requires_accommodation=1) AND p.gender='MALE' THEN 1 ELSE 0 END) male_count,
+  SUM(CASE WHEN (p.age>=6 OR p.requires_accommodation=1) AND p.gender='FEMALE' THEN 1 ELSE 0 END) female_count,
   GROUP_CONCAT(CONCAT(p.name,' (',p.gender,', ',p.age,
     CASE WHEN p.age<=5 THEN CONCAT(', bus ',CASE WHEN p.requires_bus_seat=1 THEN 'yes' ELSE 'no' END,
       ', accommodation ',CASE WHEN p.requires_accommodation=1 THEN 'yes' ELSE 'no' END) ELSE ', bus yes, accommodation yes' END,
@@ -1390,6 +1392,8 @@ async function getReport(tourId, type, filters = {}) {
     )
       return false;
     if (filters.mandal && row.mandal !== filters.mandal) return false;
+    if (filters.gender === "MALE" && Number(row.male_count || 0) < 1) return false;
+    if (filters.gender === "FEMALE" && Number(row.female_count || 0) < 1) return false;
     return true;
   });
 }
@@ -1423,6 +1427,7 @@ app.get(
         roomTypeId: req.query.room_type_id,
         paymentReceiver: req.query.payment_receiver,
         mandal: req.query.mandal,
+        gender: req.query.gender,
       }),
     ),
   ),
@@ -1479,6 +1484,7 @@ app.get(
         roomTypeId: req.query.room_type_id,
         paymentReceiver: req.query.payment_receiver,
         mandal: req.query.mandal,
+        gender: req.query.gender,
       },
     );
     const data = rows.map((x) => ({
@@ -1487,6 +1493,8 @@ app.get(
       Contact: x.contact_name,
       Phone: x.contact_phone,
       Members: x.member_count,
+      Male: x.male_count,
+      Female: x.female_count,
       "Bus Seats": x.bus_seat_count,
       "Accommodation Passengers": x.accommodation_count,
       "Member Details": x.members,
