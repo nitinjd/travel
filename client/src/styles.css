@@ -1475,3 +1475,40 @@ header .headerActions .themeToggle {
   background: var(--surface-soft, rgba(127, 127, 127, 0.06));
 }
 .contactConditions p { margin: 0.35rem 0 0; }
+
+/* Dashboard report density/layout refinement */
+@media (min-width: 901px) {
+  .reportTableWrap { overflow-x: hidden; }
+  .reportTable { width: 100%; table-layout: fixed; }
+  .reportTable thead tr { height: auto !important; }
+  .reportTable thead th {
+    height: auto !important;
+    min-height: 0 !important;
+    padding: 8px 6px !important;
+    vertical-align: top;
+    line-height: 1.15;
+  }
+  .reportTable tbody tr { height: auto !important; }
+  .reportTable td {
+    padding: 8px 6px;
+    vertical-align: top;
+    line-height: 1.25;
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1250px) {
+  .reportFilters {
+    grid-template-columns: repeat(5, minmax(105px, 1fr)) auto;
+    gap: 8px;
+    padding: 10px;
+  }
+  .reportFilters > button { padding-inline: 12px; }
+}
+
+@media (max-width: 900px) {
+  .reportFilters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .reportFilters > button { grid-column: 1 / -1; width: 100%; }
+}
+

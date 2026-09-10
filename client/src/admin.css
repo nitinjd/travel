@@ -363,12 +363,17 @@ button.danger {
 }
 .reportFilters {
   display: grid;
-  grid-template-columns: repeat(4, minmax(150px, 1fr)) auto;
-  gap: 12px;
+  grid-template-columns: repeat(5, minmax(130px, 1fr)) auto;
+  gap: 10px;
   align-items: end;
   margin-bottom: 14px;
-  padding: 14px;
+  padding: 12px;
 }
+
+/* Keep all five dashboard filters + Clear filters on one row on desktop. */
+.reportFilters .configField { min-width: 0; }
+.reportFilters .configField select { width: 100%; min-width: 0; }
+.reportFilters > button { white-space: nowrap; padding-inline: 18px; }
 .reportFilters button {
   min-height: 42px;
 }
