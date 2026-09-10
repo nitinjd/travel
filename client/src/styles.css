@@ -113,15 +113,6 @@ main {
   grid-template-columns: minmax(0, 1fr);
   min-height: calc(100vh - 74px);
 }
-.adminMain {
-  grid-template-columns: 220px minmax(0, 1fr);
-}
-.adminMain.menuHidden {
-  grid-template-columns: minmax(0, 1fr);
-}
-.adminMain.menuHidden nav {
-  display: none;
-}
 .loginMain {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -1414,24 +1405,9 @@ header .headerActions {
 }
 header .headerActions .admin,
 header .headerActions .headerLogout,
-header .headerActions .themeToggle,
-header .headerActions .adminMenuToggle {
+header .headerActions .themeToggle {
   flex: 0 0 auto;
 }
-.adminMenuToggle {
-  height: 40px;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  border: 1px solid #ffffff33;
-  border-radius: 9px;
-  padding: 0 12px;
-  color: #fff;
-  background: #ffffff12;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.adminMenuToggle:hover { background: #ffffff20; }
 
 @media (max-width: 1050px) {
   header {
@@ -1482,19 +1458,6 @@ header .headerActions .adminMenuToggle {
   header .trip .tripLocation {
     max-width: 40%;
   }
-  .adminMain {
-    grid-template-columns: 1fr;
-  }
-  .adminMain nav {
-    flex-direction: row;
-    padding: 8px 12px;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-  }
-  .adminMain nav button {
-    flex: 1;
-    justify-content: center;
-  }
 }
 
 .gujaratiText {
@@ -1533,15 +1496,6 @@ header .headerActions .adminMenuToggle {
     vertical-align: top;
     line-height: 1.25;
   }
-}
-
-@media (max-width: 550px) {
-  .adminMenuToggle {
-    width: 36px;
-    padding: 0;
-    justify-content: center;
-  }
-  .adminMenuToggle span { display: none; }
 }
 
 @media (min-width: 901px) and (max-width: 1250px) {
