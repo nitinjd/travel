@@ -2752,6 +2752,10 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
         const selfMembers = rows
           .filter((x) => x.travel_mode_type === "SELF")
           .reduce((s, x) => s + Number(x.member_count || 0), 0);
+        const busSeats = rows
+          .filter((x) => x.travel_mode_type === "BUS")
+          .reduce((s, x) => s + Number(x.bus_seat_count || 0), 0);
+        const busPassengersWithoutSeat = Math.max(busMembers - busSeats, 0);
         return (
           <div className="stats">
             <Stat
@@ -2760,7 +2764,7 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
             />
             <Stat
               label="Members"
-              value={`${rows.reduce((s, x) => s + Number(x.member_count || 0), 0)} (Bus: ${busMembers} • Self: ${selfMembers})`}
+              value={`${rows.reduce((s, x) => s + Number(x.member_count || 0), 0)} (Bus: ${busSeats} seats${busPassengersWithoutSeat ? ` + ${busPassengersWithoutSeat} ${busPassengersWithoutSeat === 1 ? "child" : "children"} without seat` : ""} • Self: ${selfMembers})`}
             />
             <Stat
               label="Collection"
