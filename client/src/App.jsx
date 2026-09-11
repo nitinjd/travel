@@ -2723,6 +2723,19 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
     });
     return map;
   }, [rows]);
+  const reportTotals = useMemo(
+    () =>
+      rows.reduce(
+        (totals, row) => ({
+          members: totals.members + Number(row.member_count || 0),
+          male: totals.male + Number(row.male_count || 0),
+          female: totals.female + Number(row.female_count || 0),
+          busSeats: totals.busSeats + Number(row.bus_seat_count || 0),
+        }),
+        { members: 0, male: 0, female: 0, busSeats: 0 },
+      ),
+    [rows],
+  );
   return (
     <>
       <Heading
@@ -3028,6 +3041,19 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
               </tr>
             ))}
           </tbody>
+          <tfoot>
+            <tr className="reportTotalRow">
+              <td data-label="Totals"><b>Filtered totals</b></td>
+              <td aria-hidden="true" />
+              <td data-label="Members"><b>{reportTotals.members}</b></td>
+              <td data-label="Male"><b>{reportTotals.male}</b></td>
+              <td data-label="Female"><b>{reportTotals.female}</b></td>
+              <td data-label="Bus seats"><b>{reportTotals.busSeats}</b></td>
+              {Array.from({ length: 12 }, (_, index) => (
+                <td aria-hidden="true" key={`total-empty-${index}`} />
+              ))}
+            </tr>
+          </tfoot>
         </table>
       </div>
     </>
