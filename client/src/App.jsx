@@ -2746,9 +2746,9 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
       {(() => {
         const busFamilies = rows.filter((x) => x.travel_mode_type === "BUS").length;
         const selfFamilies = rows.filter((x) => x.travel_mode_type === "SELF").length;
-        const busMembers = rows
+        const busSeatsBooked = rows
           .filter((x) => x.travel_mode_type === "BUS")
-          .reduce((s, x) => s + Number(x.member_count || 0), 0);
+          .reduce((s, x) => s + Number(x.bus_seat_count || 0), 0);
         const selfMembers = rows
           .filter((x) => x.travel_mode_type === "SELF")
           .reduce((s, x) => s + Number(x.member_count || 0), 0);
@@ -2760,7 +2760,7 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
             />
             <Stat
               label="Members"
-              value={`${rows.reduce((s, x) => s + Number(x.member_count || 0), 0)} (Bus: ${busMembers} • Self: ${selfMembers})`}
+              value={`${rows.reduce((s, x) => s + Number(x.member_count || 0), 0)} (Bus seats: ${busSeatsBooked} • Self: ${selfMembers})`}
             />
             <Stat
               label="Collection"
