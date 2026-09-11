@@ -853,9 +853,10 @@ async function calculateQuote(body, connection = pool) {
   );
   if (!tour || !travel || !room)
     throw Object.assign(new Error("Invalid tour selection"), { status: 400 });
-  const busSeatCount = passengers.filter(
-    (passenger) => passenger.requires_bus_seat,
-  ).length;
+  const busSeatCount =
+    travel.mode === "BUS"
+      ? passengers.filter((passenger) => passenger.requires_bus_seat).length
+      : 0;
   const accommodationCount = passengers.filter(
     (passenger) => passenger.requires_accommodation,
   ).length;
@@ -1337,7 +1338,9 @@ const reportQuery = `SELECT
   r.amount_received,r.admin_comments,r.status,t.name tour_name,t.location,
   vo.name travel_mode,vo.mode travel_mode_type,rt.name room_type,
   COUNT(p.id) member_count,
-  SUM(CASE WHEN vo.mode='BUS' AND (p.age>=6 OR p.requires_bus_seat=1) THEN 1 ELSE 0 END) bus_seat_count,
+  COALESCE((SELECT SUM(rba.seats_allocated)
+    FROM registration_bus_allocations rba
+    WHERE rba.registration_id=r.id),0) bus_seat_count,
   SUM(CASE WHEN p.age>=6 OR p.requires_accommodation=1 THEN 1 ELSE 0 END) accommodation_count,
   SUM(CASE WHEN (p.age>=6 OR p.requires_accommodation=1) AND p.gender='MALE' THEN 1 ELSE 0 END) male_count,
   SUM(CASE WHEN (p.age>=6 OR p.requires_accommodation=1) AND p.gender='FEMALE' THEN 1 ELSE 0 END) female_count,
