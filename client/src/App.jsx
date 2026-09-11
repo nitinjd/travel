@@ -2957,10 +2957,10 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
               {[
                 "Family",
                 "Mandal",
-                "Members",
-                "Male",
-                "Female",
-                "Bus seats",
+                `Members (${reportTotals.members})`,
+                `Male (${reportTotals.male})`,
+                `Female (${reportTotals.female})`,
+                `Bus seats (${reportTotals.busSeats})`,
                 "Accommodation",
                 "Travel mode",
                 "Assigned bus",
@@ -3041,19 +3041,6 @@ function Reports({ tour, token, onEditRegistration, onBack }) {
               </tr>
             ))}
           </tbody>
-          <tfoot>
-            <tr className="reportTotalRow">
-              <td data-label="Totals"><b>Filtered totals</b></td>
-              <td aria-hidden="true" />
-              <td data-label="Members"><b>{reportTotals.members}</b></td>
-              <td data-label="Male"><b>{reportTotals.male}</b></td>
-              <td data-label="Female"><b>{reportTotals.female}</b></td>
-              <td data-label="Bus seats"><b>{reportTotals.busSeats}</b></td>
-              {Array.from({ length: 12 }, (_, index) => (
-                <td aria-hidden="true" key={`total-empty-${index}`} />
-              ))}
-            </tr>
-          </tfoot>
         </table>
       </div>
     </>
