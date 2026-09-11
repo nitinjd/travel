@@ -944,25 +944,6 @@ html[data-theme="dark"] .tourList tr.selectedTour td { background:#172554; }
   }
 }
 
-.reportTable .reportTotalRow td {
-  padding-block: 12px;
-  border-top: 2px solid var(--line);
-  border-bottom: 0;
-  background: var(--surface-3, #eef1f6);
-  font-weight: 800;
-}
-
-@media (max-width: 900px) {
-  .reportTable tfoot {
-    display: block;
-    width: 100%;
-  }
-  .reportTable .reportTotalRow td:nth-child(2),
-  .reportTable .reportTotalRow td:nth-child(n + 7) {
-    display: none;
-  }
-}
-
 /* Mobile tour list: replace the compressed desktop table with readable cards. */
 @media (max-width: 650px) {
   .tourList {
